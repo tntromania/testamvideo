@@ -524,10 +524,10 @@ app.post('/api/media/video',
         const clearKeepAlive = () => clearInterval(keepAliveInterval);
 
         const sendStatus = (status) => { if (!res.writableEnded && !clientAborted) res.write(`data: ${JSON.stringify({ status })}\n\n`); };
-        const sendDone = (urls) => {
+        const sendDone = (urls, uuids) => {
             clearKeepAlive();
             if (!res.writableEnded && !clientAborted) {
-                res.write(`data: ${JSON.stringify({ file_urls: urls })}\n\n`);
+                res.write(`data: ${JSON.stringify({ file_urls: urls, file_uuids: uuids || [] })}\n\n`);
                 res.write('data: [DONE]\n\n'); res.end();
             }
         };
@@ -588,7 +588,7 @@ app.post('/api/media/video',
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-extend/grok';
                 apiModel = 'grok-3';
                 resolution = '720p';
-                duration = 10;
+                duration = parseInt(req.body.extend_duration) === 6 ? 6 : 10;
                 grokAspect = toGeminiGenAspect(aspect_ratio, true);
             } else if (isVeoExtend) {
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-extend/veo';
@@ -628,7 +628,10 @@ app.post('/api/media/video',
                     // ── Extend endpoints: trimit ref_history + prompt ──────
                     if (isGrokExtend || isVeoExtend) {
                         formData.append('ref_history', refHistory);
-                        console.log(`[Video] POST ${idx+1}/${count} → ${apiEndpoint} (extend) ref=${refHistory} | ${emailTag}`);
+                        if (isGrokExtend) {
+                            formData.append('duration', String(duration));
+                        }
+                        console.log(`[Video] POST ${idx+1}/${count} → ${apiEndpoint} (extend) ref=${refHistory} dur=${duration}s | ${emailTag}`);
                     } else {
                         // ── Generare normală ──────────────────────────────
                         formData.append('model', apiModel);
@@ -735,8 +738,9 @@ app.post('/api/media/video',
                         } catch (uploadErr) {
                             console.warn(`[Video] ⚠️ R2 upload eșuat, folosesc URL original: ${uploadErr.message} | ${emailTag}`);
                         }
-                        videoUrls.push(finalUrl);
-                        console.log(`[Video] ✅ ${idx+1}/${count} gata: ${finalUrl} | ${emailTag}`);
+                        // Salvăm și UUID-ul GeminiGen pentru extend
+                        videoUrls.push({ url: finalUrl, uuid });
+                        console.log(`[Video] ✅ ${idx+1}/${count} gata: ${finalUrl} | uuid=${uuid} | ${emailTag}`);
                         if (!clientAborted) sendStatus(`${videoUrls.length} din ${count} videoclipuri gata...`);
                     } else {
                         lastVideoError = result.error;
@@ -764,7 +768,10 @@ app.post('/api/media/video',
             try { await hubAPI.useCredits(req.userId, actualCost); } catch (e) { console.error('Eroare scădere credite video:', e.message); }
 
             console.log(`[Video] ✅ ${videoUrls.length}/${count} gata în ${elapsed()} | -${actualCost} cr | ${emailTag}`);
-            return sendDone(videoUrls);
+            // Trimitem URL-urile și UUID-urile pentru extend
+            const plainUrls = videoUrls.map(v => v.url);
+            const uuids = videoUrls.map(v => v.uuid);
+            return sendDone(plainUrls, uuids);
 
         } catch (e) {
             console.error(`[Video] ❌ Eroare neașteptată: ${e.message}`);
