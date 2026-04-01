@@ -740,6 +740,7 @@
                         </optgroup>
                     </select>
                 </div>
+                <div id="model-eta-chip" style="margin-top:10px;display:none"></div>
             </div>
 
             <!-- PROMPT -->
@@ -1005,7 +1006,40 @@ function refreshBadges(){
     const n = mode==='image'?imgCount:vidCount;
     document.getElementById('total-cost').textContent = m.cost*n;
 }
-function onModelChange(){ refreshBadges(); }
+function onModelChange(){ refreshBadges(); updateModelEtaChip(); }
+
+function updateModelEtaChip(){
+    const chip = document.getElementById('model-eta-chip');
+    if(!chip) return;
+    const modelId = document.getElementById('model-sel')?.value || '';
+
+    if(modelId.startsWith('grok-')){
+        chip.style.display = 'flex';
+        chip.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;
+            background:rgba(99,211,140,0.08);border:1px solid rgba(99,211,140,0.2);width:100%;box-sizing:border-box">
+            <span style="font-size:0.95rem">⚡</span>
+            <div>
+                <span style="font-size:0.68rem;font-weight:700;color:rgba(99,211,140,0.9);letter-spacing:0.02em">~40 secunde</span>
+                <span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">procesare rapidă</span>
+            </div>
+        </div>`;
+    } else if(modelId.startsWith('veo')){
+        chip.style.display = 'flex';
+        chip.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;
+            background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);width:100%;box-sizing:border-box">
+            <span style="font-size:0.95rem">⏳</span>
+            <div>
+                <span style="font-size:0.68rem;font-weight:700;color:rgba(167,139,250,0.9);letter-spacing:0.02em">1–2 minute</span>
+                <span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">servere aglomerate</span>
+            </div>
+        </div>`;
+    } else {
+        chip.style.display = 'none';
+        chip.innerHTML = '';
+    }
+}
 
 function switchMode(m){
     mode=m; const isVid=m==='video';
@@ -1015,6 +1049,7 @@ function switchMode(m){
     document.getElementById('og-vid').style.display = isVid?'':'none';
     document.getElementById('og-grok').style.display = isVid?'':'none';
     document.getElementById('model-sel').value = isVid?'veo3.1-fast':'gemini-flash';
+    updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
     document.getElementById('refs-section').classList.toggle('hidden', isVid);
