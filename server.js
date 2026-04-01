@@ -435,27 +435,35 @@ const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, interv
                 headers: { 'x-api-key': apiKey }
             });
             const data = await res.json();
-            const result = data?.result || data;
 
-            const status = result.status;
-            const pct = result.status_percentage || 0;
+            // API-ul poate returna obiectul direct sau învelit în { result: ... }
+            const result = (data?.result && typeof data.result === 'object') ? data.result : data;
+
+            // status poate fi număr (1/2/3) sau string
+            const statusRaw = result.status ?? result.status_code ?? result.state;
+            const status = typeof statusRaw === 'string'
+                ? (statusRaw === 'completed' ? 2 : statusRaw === 'failed' ? 3 : 1)
+                : statusRaw;
+            const pct = result.status_percentage ?? result.progress ?? 0;
 
             if (poll <= 3 || poll % 10 === 0) {
-                console.log(`[GeminiGen] Poll ${poll}/${maxPolls} uuid=${uuid} status=${status} pct=${pct}% | ${emailTag}`);
+                console.log(`[GeminiGen] Poll ${poll}/${maxPolls} uuid=${uuid} status=${statusRaw}(${status}) pct=${pct}% | ${emailTag}`);
+                if (poll <= 2) console.log(`[GeminiGen] Raw response keys: ${Object.keys(result).join(', ')}`);
             }
 
             if (status === 2) {
-                // Completed — extract media_url
-                const mediaUrl = result.media_url || result.generate_result || result.url;
+                const mediaUrl = result.media_url || result.generate_result || result.url
+                    || result.video_url || result.output_url || result.file_url
+                    || result.result_url || result.download_url;
                 if (mediaUrl) return { success: true, url: mediaUrl };
-                return { success: false, error: 'Video gata dar fără URL.' };
+                console.error(`[GeminiGen] Status 2 dar fără URL! Keys: ${JSON.stringify(Object.keys(result))}`);
+                return { success: false, error: 'Video gata dar fără URL. Verifică logs.' };
             }
 
             if (status === 3) {
-                return { success: false, error: result.error_message || result.status_desc || 'Generarea a eșuat.' };
+                return { success: false, error: result.error_message || result.status_desc || result.message || 'Generarea a eșuat.' };
             }
 
-            // status === 1 → still processing
         } catch (e) {
             console.warn(`[GeminiGen] Poll ${poll} eroare rețea: ${e.message}`);
         }
@@ -579,28 +587,49 @@ app.post('/api/media/video',
                         formData.append('aspect_ratio', grokAspect);
                     }
 
-                    // Atașăm imagini de referință (start/end frame ca ref_images)
-                    if (startImageFile) {
-                        const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype);
-                        const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
-                        formData.append('ref_images', blob, `start_frame.${compressed.mimetype.split('/')[1] || 'jpg'}`);
-                    }
-                    if (endImageFile) {
-                        const compressed = await compressForVideo(endImageFile.buffer, endImageFile.mimetype);
-                        const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
-                        formData.append('ref_images', blob, `end_frame.${compressed.mimetype.split('/')[1] || 'jpg'}`);
-                    }
-
-                    if (!startImageFile && !endImageFile && refImages.length > 0) {
-                        for (const ref of refImages.slice(0, 3)) {
-                            const compressed = await compressForVideo(ref.buffer, ref.mimetype);
+                    // Atașăm imagini de referință
+                    // ⚠️ Grok acceptă fișiere DOAR în câmpul 'files', nu 'ref_images'
+                    // ⚠️ Veo acceptă fișiere în câmpul 'ref_images'
+                    if (isGrok) {
+                        if (startImageFile) {
+                            const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype);
                             const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
-                            formData.append('ref_images', blob, ref.originalname || `ref.${compressed.mimetype.split('/')[1] || 'jpg'}`);
+                            formData.append('files', blob, `start_frame.${compressed.mimetype.split('/')[1] || 'jpg'}`);
                         }
-                    }
-
-                    if (isVeo && startImageFile) {
-                        formData.append('mode_image', 'frame');
+                        if (endImageFile) {
+                            const compressed = await compressForVideo(endImageFile.buffer, endImageFile.mimetype);
+                            const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                            formData.append('files', blob, `end_frame.${compressed.mimetype.split('/')[1] || 'jpg'}`);
+                        }
+                        if (!startImageFile && !endImageFile && refImages.length > 0) {
+                            for (const ref of refImages.slice(0, 3)) {
+                                const compressed = await compressForVideo(ref.buffer, ref.mimetype);
+                                const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                formData.append('files', blob, ref.originalname || `ref.${compressed.mimetype.split('/')[1] || 'jpg'}`);
+                            }
+                        }
+                    } else {
+                        // Veo: ref_images acceptă fișiere
+                        if (startImageFile) {
+                            const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype);
+                            const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                            formData.append('ref_images', blob, `start_frame.${compressed.mimetype.split('/')[1] || 'jpg'}`);
+                        }
+                        if (endImageFile) {
+                            const compressed = await compressForVideo(endImageFile.buffer, endImageFile.mimetype);
+                            const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                            formData.append('ref_images', blob, `end_frame.${compressed.mimetype.split('/')[1] || 'jpg'}`);
+                        }
+                        if (!startImageFile && !endImageFile && refImages.length > 0) {
+                            for (const ref of refImages.slice(0, 3)) {
+                                const compressed = await compressForVideo(ref.buffer, ref.mimetype);
+                                const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                formData.append('ref_images', blob, ref.originalname || `ref.${compressed.mimetype.split('/')[1] || 'jpg'}`);
+                            }
+                        }
+                        if (startImageFile) {
+                            formData.append('mode_image', 'frame');
+                        }
                     }
 
                     console.log(`[Video] POST ${idx+1}/${count} → ${apiEndpoint} model=${apiModel} | ${emailTag}`);
