@@ -940,11 +940,11 @@
             <div id="refs-section" class="panel-s pt-0 border-none mt-2">
                 <label class="field-label flex justify-between items-center mb-3">
                     <span>Referințe <span class="normal-case font-medium" style="color:rgba(255,255,255,0.2)">(opțional)</span></span>
-                    <span class="text-[0.62rem] px-2.5 py-1 rounded-lg cursor-pointer font-display font-bold transition-all" style="background:rgba(99,102,241,0.15);color:rgba(165,168,255,0.8);border:1px solid rgba(99,102,241,0.25)" onclick="document.getElementById('ref-file').click()">+ Adaugă</span>
+                    <span class="text-[0.62rem] px-2.5 py-1 rounded-lg cursor-pointer font-display font-bold transition-all" style="background:rgba(99,102,241,0.15);color:rgba(165,168,255,0.8);border:1px solid rgba(99,102,241,0.25)" onclick="openRefsPicker()">+ Adaugă</span>
                 </label>
                 <input type="file" id="ref-file" class="hidden" accept="image/*" multiple onchange="handleFileSelect(event)">
                 <div id="ref-gallery" class="flex flex-wrap gap-2 mb-3 hidden"></div>
-                <div id="ref-zone" class="dropzone flex flex-col items-center justify-center text-center p-5 min-h-[90px] mb-3" onclick="document.getElementById('ref-file').click()">
+                <div id="ref-zone" class="dropzone flex flex-col items-center justify-center text-center p-5 min-h-[90px] mb-3" onclick="openRefsPicker()">
                     <div class="w-8 h-8 rounded-xl flex items-center justify-center mb-1.5" style="background:rgba(255,255,255,0.05)">
                         <i class="fa-solid fa-cloud-arrow-up" style="color:rgba(255,255,255,0.3)"></i>
                     </div>
@@ -1368,7 +1368,6 @@ function buildShimmerLoading(currentMode, count, ratio, modelId) {
         ${header}
         <div class="flex gap-2 justify-center flex-wrap">${placeholders}</div>
         <p id="${statusId}" class="text-center text-xs font-medium mt-1" style="color:rgba(255,255,255,0.3)">${statusText}</p>
-        ${etaBadge}
     </div>`;
 }
 
@@ -1687,6 +1686,9 @@ function openExtendModal(uuid, url) {
     _extendUrl  = url  || '';
     _extendModel = 'grok';
     _extendDuration = 10;
+
+    // Salvăm în localStorage pentru recover după refresh
+    try { localStorage.setItem('viralio_last_extend', JSON.stringify({ uuid, url, ts: Date.now() })); } catch(e){}
 
     // Set preview video
     const vid = document.getElementById('ext-preview-vid');
@@ -2025,6 +2027,254 @@ function toggleMobileSettings(){
         setInterval(checkVersion, CHECK_INTERVAL);
     }, 10000);
 })();
+</script>
+<!-- REFS PICKER MODAL -->
+<div id="refs-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(4,4,12,0.92);backdrop-filter:blur(24px);z-index:250000;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s" onclick="closeRefsPicker(event)">
+    <div onclick="event.stopPropagation()" style="background:linear-gradient(160deg,#111120 0%,#0c0c1a 100%);border:1px solid rgba(255,255,255,0.08);border-radius:28px;width:92%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 40px 80px -10px rgba(0,0,0,0.8),0 0 0 1px rgba(99,102,241,0.12),0 0 60px rgba(99,102,241,0.06)">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 26px 18px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:38px;height:38px;border-radius:13px;background:linear-gradient(135deg,rgba(99,102,241,0.3),rgba(236,72,153,0.2));border:1px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(99,102,241,0.15)">
+                    <i class="fa-solid fa-images" style="color:rgba(165,168,255,0.95);font-size:0.95rem"></i>
+                </div>
+                <div>
+                    <h3 style="font-size:1rem;font-weight:900;color:white;margin:0;letter-spacing:-0.01em">Referințe</h3>
+                    <p style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin:0;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">Alege din istoric sau încarcă</p>
+                </div>
+            </div>
+            <button onclick="closeRefsPicker()" style="width:34px;height:34px;border-radius:11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);color:rgba(255,255,255,0.45);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='rgba(255,255,255,0.8)'" onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='rgba(255,255,255,0.45)'"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- Upload button -->
+        <div style="padding:16px 26px 0;flex-shrink:0">
+            <input type="file" id="refs-picker-file" class="hidden" accept="image/*" multiple onchange="handleRefsPickerUpload(event)">
+            <button onclick="document.getElementById('refs-picker-file').click()" style="width:100%;padding:13px;border-radius:16px;border:1.5px dashed rgba(99,102,241,0.4);background:rgba(99,102,241,0.05);color:rgba(165,168,255,0.85);font-size:0.84rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;transition:all 0.2s;letter-spacing:0.01em" onmouseover="this.style.background='rgba(99,102,241,0.12)';this.style.borderColor='rgba(99,102,241,0.6)'" onmouseout="this.style.background='rgba(99,102,241,0.05)';this.style.borderColor='rgba(99,102,241,0.4)'">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:1rem"></i>
+                Încarcă de pe PC
+            </button>
+        </div>
+
+        <!-- Selected refs preview -->
+        <div id="refs-picker-selected" style="padding:14px 26px 0;flex-shrink:0;display:none">
+            <div style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(165,168,255,0.6);margin-bottom:8px">Selectate</div>
+            <div id="refs-picker-selected-grid" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+
+        <!-- Separator -->
+        <div style="padding:14px 26px 10px;flex-shrink:0;display:flex;align-items:center;gap:10px">
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></div>
+            <span style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.2)">Din Istoric</span>
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></div>
+        </div>
+
+        <!-- History grid -->
+        <div id="refs-picker-history" style="flex:1;overflow-y:auto;padding:0 26px 20px" class="no-scrollbar">
+            <div id="refs-picker-history-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+                <div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem">
+                    <i class="fa-solid fa-spinner fa-spin mb-2 text-lg block" style="color:rgba(99,102,241,0.4)"></i>
+                    Se încarcă istoricul...
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer: confirm -->
+        <div style="padding:16px 26px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;background:rgba(8,8,18,0.6)">
+            <span id="refs-picker-count-label" style="font-size:0.75rem;font-weight:700;color:rgba(255,255,255,0.3)">0 selectate (max 4)</span>
+            <button onclick="confirmRefsPicker()" style="padding:11px 28px;border-radius:13px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;font-size:0.88rem;font-weight:800;border:none;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.2s;box-shadow:0 8px 20px rgba(99,102,241,0.3)" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 12px 26px rgba(99,102,241,0.45)'" onmouseout="this.style.transform='none';this.style.boxShadow='0 8px 20px rgba(99,102,241,0.3)'">
+                <i class="fa-solid fa-check"></i> Confirmă
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- EXTEND RECOVER TOAST -->
+<div id="extend-recover-bar" style="display:none;position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);z-index:180000;opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1)">
+    <div style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(15,15,28,0.98),rgba(12,12,22,0.98));border:1px solid rgba(99,102,241,0.35);border-radius:18px;padding:13px 18px;box-shadow:0 20px 50px rgba(0,0,0,0.6),0 0 0 1px rgba(99,102,241,0.1),0 0 30px rgba(99,102,241,0.08);backdrop-filter:blur(20px);white-space:nowrap">
+        <div style="width:36px;height:36px;border-radius:11px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-solid fa-forward" style="color:rgba(165,168,255,0.9);font-size:0.85rem"></i>
+        </div>
+        <div>
+            <div style="font-size:0.82rem;font-weight:800;color:white;margin-bottom:1px">Ai un video de extins</div>
+            <div style="font-size:0.68rem;color:rgba(255,255,255,0.35);font-weight:600">Sesiunea anterioară a lăsat un video nesalvat</div>
+        </div>
+        <button id="extend-recover-btn" style="padding:8px 16px;border-radius:10px;background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);color:rgba(165,168,255,0.95);font-size:0.78rem;font-weight:800;cursor:pointer;white-space:nowrap;transition:all 0.2s;flex-shrink:0" onmouseover="this.style.background='rgba(99,102,241,0.35)'" onmouseout="this.style.background='rgba(99,102,241,0.2)'">Extinde acum</button>
+        <button onclick="dismissExtendRecover()" style="width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.35);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color='rgba(255,255,255,0.35)'"><i class="fa-solid fa-xmark text-xs"></i></button>
+    </div>
+</div>
+
+<script>
+// ===================== EXTEND RECOVER AFTER REFRESH =====================
+(function(){
+    try {
+        const saved = localStorage.getItem('viralio_last_extend');
+        if(!saved) return;
+        const data = JSON.parse(saved);
+        if(!data || !data.url) return;
+        // Show only if saved in last 2 hours
+        if(Date.now() - data.ts > 2 * 60 * 60 * 1000) { localStorage.removeItem('viralio_last_extend'); return; }
+
+        const bar = document.getElementById('extend-recover-bar');
+        if(!bar) return;
+        bar.style.display = 'block';
+        requestAnimationFrame(() => {
+            bar.style.opacity = '1';
+            bar.style.transform = 'translateX(-50%) translateY(0)';
+        });
+
+        document.getElementById('extend-recover-btn').onclick = () => {
+            dismissExtendRecover();
+            openExtendModal(data.uuid, data.url);
+        };
+
+        // Auto-dismiss after 10s
+        setTimeout(dismissExtendRecover, 10000);
+    } catch(e){}
+})();
+
+function dismissExtendRecover(){
+    const bar = document.getElementById('extend-recover-bar');
+    if(!bar) return;
+    bar.style.opacity = '0';
+    bar.style.transform = 'translateX(-50%) translateY(20px)';
+    setTimeout(() => { bar.style.display = 'none'; }, 400);
+}
+
+// ===================== REFS PICKER MODAL =====================
+let _refsPickerSelected = []; // { type:'history'|'upload', url, file? }
+
+function openRefsPicker() {
+    _refsPickerSelected = [...uploadedRefs.map(f => ({ type:'upload', file:f, url: URL.createObjectURL(f) }))];
+    renderRefsPickerSelected();
+
+    const modal = document.getElementById('refs-picker-modal');
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+
+    loadRefsPickerHistory();
+}
+
+function closeRefsPicker(e) {
+    if(e && e.target !== document.getElementById('refs-picker-modal')) return;
+    const modal = document.getElementById('refs-picker-modal');
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+}
+
+async function loadRefsPickerHistory() {
+    const grid = document.getElementById('refs-picker-history-grid');
+    const token = getToken();
+    if(!token) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-lock mb-2 text-lg block" style="color:rgba(255,255,255,0.15)"></i>Conectează-te pentru istoric</div>`;
+        return;
+    }
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin mb-2 text-lg block" style="color:rgba(99,102,241,0.4)"></i>Se încarcă...</div>`;
+    try {
+        const res = await fetch('/api/media/history?type=image&page=1&limit=40', { headers:{'Authorization':'Bearer '+token} });
+        const data = await res.json();
+        const allUrls = [];
+        (data.history||[]).forEach(item => { const u = item.supabaseUrl||item.originalUrl; if(u) allUrls.push(u); });
+
+        if(!allUrls.length) {
+            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-image mb-2 text-xl block" style="color:rgba(255,255,255,0.1)"></i>Nicio imagine în istoric</div>`;
+            return;
+        }
+
+        grid.innerHTML = allUrls.map((url, i) => {
+            const isSelected = _refsPickerSelected.some(s => s.url === url);
+            return `<div class="refs-picker-item" data-url="${url}" onclick="toggleRefsPickerItem(this,'${url}')" style="aspect-ratio:1;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;border:2px solid ${isSelected?'rgba(99,102,241,0.7)':'transparent'};transition:all 0.18s;background:#0a0a16">
+                <img src="${url}" loading="lazy" style="width:100%;height:100%;object-fit:cover;transition:transform 0.2s" onerror="this.parentElement.style.display='none'">
+                <div class="refs-picker-check" style="position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;background:${isSelected?'rgba(99,102,241,0.95)':'rgba(0,0,0,0.4)'};border:2px solid ${isSelected?'rgba(165,168,255,0.8)':'rgba(255,255,255,0.3)'};display:flex;align-items:center;justify-content:center;transition:all 0.18s;backdrop-filter:blur(4px)">
+                    <i class="fa-solid fa-check" style="font-size:0.55rem;color:white;opacity:${isSelected?1:0};transition:opacity 0.15s"></i>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(248,113,113,0.5);font-size:0.8rem">Eroare la încărcare</div>`;
+    }
+}
+
+function toggleRefsPickerItem(el, url) {
+    const already = _refsPickerSelected.findIndex(s => s.url === url);
+    if(already >= 0) {
+        _refsPickerSelected.splice(already, 1);
+        el.style.border = '2px solid transparent';
+        const check = el.querySelector('.refs-picker-check');
+        if(check) { check.style.background='rgba(0,0,0,0.4)'; check.style.borderColor='rgba(255,255,255,0.3)'; check.querySelector('i').style.opacity='0'; }
+    } else {
+        if(_refsPickerSelected.length >= 4) { toast('Maxim 4 referințe!'); return; }
+        _refsPickerSelected.push({ type:'history', url });
+        el.style.border = '2px solid rgba(99,102,241,0.7)';
+        const check = el.querySelector('.refs-picker-check');
+        if(check) { check.style.background='rgba(99,102,241,0.95)'; check.style.borderColor='rgba(165,168,255,0.8)'; check.querySelector('i').style.opacity='1'; }
+    }
+    renderRefsPickerSelected();
+}
+
+function handleRefsPickerUpload(e) {
+    Array.from(e.target.files).forEach(f => {
+        if(_refsPickerSelected.length >= 4) return;
+        _refsPickerSelected.push({ type:'upload', file:f, url: URL.createObjectURL(f) });
+    });
+    renderRefsPickerSelected();
+    e.target.value = '';
+}
+
+function renderRefsPickerSelected() {
+    const wrap = document.getElementById('refs-picker-selected');
+    const grid = document.getElementById('refs-picker-selected-grid');
+    const label = document.getElementById('refs-picker-count-label');
+    const n = _refsPickerSelected.length;
+    label.textContent = `${n} selectate (max 4)`;
+    if(!n) { wrap.style.display='none'; return; }
+    wrap.style.display='block';
+    grid.innerHTML = _refsPickerSelected.map((s,i) => `
+        <div style="position:relative;width:54px;height:54px;border-radius:10px;overflow:hidden;border:1.5px solid rgba(99,102,241,0.4)">
+            <img src="${s.url}" style="width:100%;height:100%;object-fit:cover">
+            <button onclick="removeRefsPickerItem(${i})" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(239,68,68,0.85);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.5rem"><i class="fa-solid fa-xmark"></i></button>
+        </div>`).join('');
+}
+
+function removeRefsPickerItem(i) {
+    _refsPickerSelected.splice(i, 1);
+    renderRefsPickerSelected();
+    // Deselect in history grid if it was a history item
+    document.querySelectorAll('.refs-picker-item').forEach(el => {
+        const url = el.dataset.url;
+        const isSelected = _refsPickerSelected.some(s => s.url === url);
+        el.style.border = isSelected ? '2px solid rgba(99,102,241,0.7)' : '2px solid transparent';
+        const check = el.querySelector('.refs-picker-check');
+        if(check) {
+            check.style.background = isSelected ? 'rgba(99,102,241,0.95)' : 'rgba(0,0,0,0.4)';
+            check.style.borderColor = isSelected ? 'rgba(165,168,255,0.8)' : 'rgba(255,255,255,0.3)';
+            check.querySelector('i').style.opacity = isSelected ? '1' : '0';
+        }
+    });
+}
+
+function confirmRefsPicker() {
+    uploadedRefs = [];
+    const urlPromises = _refsPickerSelected.map(async s => {
+        if(s.type === 'upload') return s.file;
+        // Convert history URL to File
+        try {
+            const res = await fetch(s.url);
+            const blob = await res.blob();
+            const ext = blob.type.includes('png') ? 'png' : 'jpg';
+            return new File([blob], `ref_${Date.now()}.${ext}`, { type: blob.type });
+        } catch(e) { return null; }
+    });
+    Promise.all(urlPromises).then(files => {
+        uploadedRefs = files.filter(Boolean);
+        renderRefGallery();
+        closeRefsPicker();
+        toast(`${uploadedRefs.length} referință${uploadedRefs.length!==1?'e':''} adăugate!`);
+    });
+}
+
+// Close on Escape
+document.addEventListener('keydown', e => {
+    if(e.key==='Escape' && document.getElementById('refs-picker-modal').style.display==='flex') closeRefsPicker();
+});
 </script>
 </body>
 </html>
