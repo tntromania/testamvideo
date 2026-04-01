@@ -431,45 +431,40 @@ const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, interv
     for (let poll = 1; poll <= maxPolls; poll++) {
         await new Promise(r => setTimeout(r, intervalMs));
         try {
-            // Încercăm endpoint-ul corect de history
-            const historyUrl = `https://api.geminigen.ai/uapi/v1/histories/${uuid}`;
+            // Endpoint corect: /uapi/v1/history/{uuid} (singular, nu plural)
+            const historyUrl = `https://api.geminigen.ai/uapi/v1/history/${uuid}`;
             const res = await fetch(historyUrl, {
-                headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }
+                headers: { 'x-api-key': apiKey }
             });
-            if (poll <= 2) console.log(`[GeminiGen] Poll ${poll} HTTP status: ${res.status} url: ${historyUrl}`);
             const data = await res.json();
 
-            // Dacă răspunsul conține 'detail' = eroare de la API (autentificare, not found etc.)
+            // Dacă răspunsul conține 'detail' = eroare API
             if (data?.detail && !data.status && !data.id) {
-                // Log complet ca să vedem exact ce eroare returnează
-                if (poll <= 5) console.error(`[GeminiGen] Poll ${poll} API error detail: ${JSON.stringify(data.detail)}`);
-                // Continuăm polling — poate e eroare tranzitorie
+                console.warn(`[GeminiGen] Poll ${poll} API error: ${JSON.stringify(data.detail)}`);
                 continue;
             }
 
             // API-ul poate returna obiectul direct sau învelit în { result: ... }
             const result = (data?.result && typeof data.result === 'object') ? data.result : data;
 
-            // status poate fi număr (1/2/3) sau string
-            const statusRaw = result.status ?? result.status_code ?? result.state;
-            const status = typeof statusRaw === 'string'
-                ? (statusRaw === 'completed' ? 2 : statusRaw === 'failed' ? 3 : 1)
-                : statusRaw;
-            const pct = result.status_percentage ?? result.progress ?? 0;
+            const status = result.status ?? result.status_code;
+            const pct = result.status_percentage ?? 0;
 
             if (poll <= 3 || poll % 10 === 0) {
-                console.log(`[GeminiGen] Poll ${poll}/${maxPolls} uuid=${uuid} status=${statusRaw}(${status}) pct=${pct}% | ${emailTag}`);
-                if (poll <= 2) {
-                console.log(`[GeminiGen] Raw response keys: ${Object.keys(result).join(', ')}`);
-                console.log('[GeminiGen] Full raw response:', JSON.stringify(data).substring(0, 500));
-            }
+                console.log(`[GeminiGen] Poll ${poll}/${maxPolls} uuid=${uuid} status=${status} pct=${pct}% | ${emailTag}`);
             }
 
             if (status === 2) {
-                const mediaUrl = result.media_url || result.generate_result || result.url
-                    || result.video_url || result.output_url || result.file_url
-                    || result.result_url || result.download_url;
+                // Structura răspunsului: generated_video[0].video_url (sau generated_image, etc.)
+                const videoUrl = result.generated_video?.[0]?.video_url
+                    || result.generated_video?.[0]?.url;
+                if (videoUrl) return { success: true, url: videoUrl };
+
+                // Fallback: generate_result sau alte câmpuri
+                const mediaUrl = result.generate_result || result.media_url || result.url
+                    || result.video_url || result.output_url || result.file_url;
                 if (mediaUrl) return { success: true, url: mediaUrl };
+
                 console.error(`[GeminiGen] Status 2 dar fără URL! Keys: ${JSON.stringify(Object.keys(result))}`);
                 return { success: false, error: 'Video gata dar fără URL. Verifică logs.' };
             }
