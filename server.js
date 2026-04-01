@@ -431,10 +431,21 @@ const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, interv
     for (let poll = 1; poll <= maxPolls; poll++) {
         await new Promise(r => setTimeout(r, intervalMs));
         try {
-            const res = await fetch(`https://api.geminigen.ai/uapi/v1/histories/${uuid}`, {
-                headers: { 'x-api-key': apiKey }
+            // Încercăm endpoint-ul corect de history
+            const historyUrl = `https://api.geminigen.ai/uapi/v1/histories/${uuid}`;
+            const res = await fetch(historyUrl, {
+                headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }
             });
+            if (poll <= 2) console.log(`[GeminiGen] Poll ${poll} HTTP status: ${res.status} url: ${historyUrl}`);
             const data = await res.json();
+
+            // Dacă răspunsul conține 'detail' = eroare de la API (autentificare, not found etc.)
+            if (data?.detail && !data.status && !data.id) {
+                // Log complet ca să vedem exact ce eroare returnează
+                if (poll <= 5) console.error(`[GeminiGen] Poll ${poll} API error detail: ${JSON.stringify(data.detail)}`);
+                // Continuăm polling — poate e eroare tranzitorie
+                continue;
+            }
 
             // API-ul poate returna obiectul direct sau învelit în { result: ... }
             const result = (data?.result && typeof data.result === 'object') ? data.result : data;
@@ -448,7 +459,10 @@ const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, interv
 
             if (poll <= 3 || poll % 10 === 0) {
                 console.log(`[GeminiGen] Poll ${poll}/${maxPolls} uuid=${uuid} status=${statusRaw}(${status}) pct=${pct}% | ${emailTag}`);
-                if (poll <= 2) console.log(`[GeminiGen] Raw response keys: ${Object.keys(result).join(', ')}`);
+                if (poll <= 2) {
+                console.log(`[GeminiGen] Raw response keys: ${Object.keys(result).join(', ')}`);
+                console.log('[GeminiGen] Full raw response:', JSON.stringify(data).substring(0, 500));
+            }
             }
 
             if (status === 2) {
