@@ -914,9 +914,9 @@
                                 <img id="start-frame-img" src="" alt="start">
                                 <div class="remove-btn" onclick="removeFrame('start')"><i class="fa-solid fa-xmark"></i></div>
                             </div>
-                            <div id="start-frame-zone" class="dropzone flex flex-col items-center justify-center text-center p-3 min-h-[80px]" onclick="document.getElementById('start-frame-input').click()">
-                                <i class="fa-solid fa-cloud-arrow-up mb-1" style="color:rgba(255,255,255,0.2);font-size:1.2rem"></i>
-                                <span class="text-[0.62rem] font-bold" style="color:rgba(255,255,255,0.3)">Încarcă</span>
+                            <div id="start-frame-zone" class="dropzone flex flex-col items-center justify-center text-center p-3 min-h-[80px]" onclick="openFramePicker('start')">
+                                <i class="fa-solid fa-images mb-1" style="color:rgba(255,255,255,0.2);font-size:1.2rem"></i>
+                                <span class="text-[0.62rem] font-bold" style="color:rgba(255,255,255,0.3)">Alege imagine</span>
                             </div>
                         </div>
                         <div>
@@ -927,9 +927,9 @@
                                 <img id="end-frame-img" src="" alt="end">
                                 <div class="remove-btn" onclick="removeFrame('end')"><i class="fa-solid fa-xmark"></i></div>
                             </div>
-                            <div id="end-frame-zone" class="dropzone flex flex-col items-center justify-center text-center p-3 min-h-[80px]" onclick="document.getElementById('end-frame-input').click()">
-                                <i class="fa-solid fa-cloud-arrow-up mb-1" style="color:rgba(255,255,255,0.2);font-size:1.2rem"></i>
-                                <span class="text-[0.62rem] font-bold" style="color:rgba(255,255,255,0.3)">Încarcă</span>
+                            <div id="end-frame-zone" class="dropzone flex flex-col items-center justify-center text-center p-3 min-h-[80px]" onclick="openFramePicker('end')">
+                                <i class="fa-solid fa-images mb-1" style="color:rgba(255,255,255,0.2);font-size:1.2rem"></i>
+                                <span class="text-[0.62rem] font-bold" style="color:rgba(255,255,255,0.3)">Alege imagine</span>
                             </div>
                         </div>
                     </div>
@@ -1155,7 +1155,8 @@ function switchMode(m){
     updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
-    // refs visible in both modes
+    // refs: only for image mode; video uses start/end frame picker
+    document.getElementById('refs-section').classList.toggle('hidden', isVid);
     refreshBadges();
     if(getToken()) loadHistory();
 }
@@ -1494,15 +1495,12 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
             const uuid = (uuids && uuids[idx]) || '';
             const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
             el.innerHTML=`
-                <div class="${aspectClass(ratioVal)} w-full relative overflow-hidden group" style="background:#000;border-radius:14px 14px 0 0">
+                <div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0">
                     <video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video>
-                    <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="z-index:10">
-                        <button ${extendAttr} onclick="event.stopPropagation();openExtendModal(this.dataset.uuid, this.dataset.url)" class="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl backdrop-blur-md transition-all hover:scale-105" style="background:rgba(99,102,241,0.85);color:white;border:1px solid rgba(165,168,255,0.3);box-shadow:0 4px 16px rgba(99,102,241,0.4)"><i class="fa-solid fa-forward text-[0.6rem]"></i>Extend</button>
-                    </div>
                 </div>
                 <div class="p-2.5 flex gap-2" style="border-top:1px solid rgba(255,255,255,0.05)">
                     <button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="flex-1 text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button>
-                    <button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3)" onmouseover="this.style.background='rgba(99,102,241,0.22)'" onmouseout="this.style.background='rgba(99,102,241,0.12)'"><i class="fa-solid fa-forward text-[0.65rem]"></i>Extend</button>
+                    <button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35)" onmouseover="this.style.background='rgba(99,102,241,0.28)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'"><i class="fa-solid fa-forward text-[0.65rem]"></i><span class="hidden sm:inline">Extindere</span><span class="sm:hidden">+</span></button>
                 </div>`;
         }
         return el;
@@ -1896,16 +1894,17 @@ async function loadHistory(append=false){
                         <img src="${url}" loading="lazy" class="w-full h-full object-cover" onerror="this.parentElement.style.opacity='0.3';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22/>'">
                     </div>`;
                 return `
-                    <div class="aspect-video relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.03] group" style="border:1px solid rgba(255,255,255,0.06)" onclick="openLightbox(window.currentHistoryMedia,${idx},'video')">
+                    <div class="aspect-video relative rounded-xl overflow-hidden transition-all hover:scale-[1.03]" style="border:1px solid rgba(255,255,255,0.06)">
+                        <div onclick="openLightbox(window.currentHistoryMedia,${idx},'video')" class="absolute inset-0 cursor-pointer" style="z-index:1"></div>
                         <video data-src="${url}" class="w-full h-full object-cover hist-video" preload="none" muted playsinline
                             onerror="this.parentElement.style.opacity='0.3'"></video>
-                        <div class="absolute inset-0 flex items-center justify-center" style="background:rgba(0,0,0,0.35)">
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none" style="background:rgba(0,0,0,0.35);z-index:2">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);backdrop-filter:blur(4px)">
                                 <i class="fa-solid fa-play text-white text-xs ml-0.5"></i>
                             </div>
                         </div>
-                        <div class="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="z-index:10">
-                            <button data-url="${url}" onclick="event.stopPropagation();openExtendModal('',this.dataset.url)" class="flex items-center gap-1 text-[0.6rem] font-bold px-2 py-1 rounded-lg backdrop-blur-md" style="background:rgba(99,102,241,0.85);color:white;border:1px solid rgba(165,168,255,0.3)"><i class="fa-solid fa-forward" style="font-size:0.5rem"></i>Extend</button>
+                        <div class="absolute bottom-1.5 right-1.5" style="z-index:3">
+                            <button data-url="${url}" onclick="event.stopPropagation();openExtendModal('',this.dataset.url)" class="flex items-center gap-1 text-[0.6rem] font-bold px-2 py-1 rounded-lg" style="background:rgba(99,102,241,0.88);color:white;border:1px solid rgba(165,168,255,0.3);backdrop-filter:blur(4px)"><i class="fa-solid fa-forward" style="font-size:0.5rem"></i><span class="hidden sm:inline">Extindere</span><span class="sm:hidden">+</span></button>
                         </div>
                     </div>`;
             }).join('');
@@ -2284,14 +2283,14 @@ function confirmRefsPicker() {
         if(s.type === 'upload') return s.file;
         // For history URLs: try proxy first, fallback to passing URL as-is via a blob fetch through our own server
         try {
+            const token = getToken();
             const proxyUrl = `/api/media/proxy-download?url=${encodeURIComponent(s.url)}&filename=ref.jpg`;
-            const res = await fetch(proxyUrl);
-            if(!res.ok) throw new Error('proxy fail');
+            const res = await fetch(proxyUrl, { headers: token ? { 'Authorization': 'Bearer ' + token } : {} });
+            if(!res.ok) throw new Error('proxy fail ' + res.status);
             const blob = await res.blob();
             const ext = blob.type.includes('png') ? 'png' : 'jpg';
             return new File([blob], `ref_hist_${Date.now()}.${ext}`, { type: blob.type });
         } catch(e) {
-            // If proxy fails too, store URL as a special marker file won't work — skip
             return null;
         }
     });
@@ -2303,10 +2302,129 @@ function confirmRefsPicker() {
     });
 }
 
-// Close on Escape
+// ===================== FRAME PICKER (Start / End) =====================
+let _framePickerSlot = 'start'; // 'start' | 'end'
+
+function openFramePicker(slot) {
+    _framePickerSlot = slot;
+    const modal = document.getElementById('frame-picker-modal');
+    const title = document.getElementById('frame-picker-title');
+    title.textContent = slot === 'start' ? '🟢 Start Frame' : '🔴 End Frame';
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+    loadFramePickerHistory();
+}
+
+function closeFramePicker(e) {
+    if(e && e.target !== document.getElementById('frame-picker-modal')) return;
+    const modal = document.getElementById('frame-picker-modal');
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+}
+
+async function loadFramePickerHistory() {
+    const grid = document.getElementById('frame-picker-grid');
+    const token = getToken();
+    if(!token) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-lock mb-2 text-lg block" style="color:rgba(255,255,255,0.15)"></i>Conectează-te pentru istoric</div>`;
+        return;
+    }
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin mb-2 text-lg block" style="color:rgba(99,102,241,0.4)"></i>Se încarcă...</div>`;
+    try {
+        const res = await fetch('/api/media/history?type=image&page=1&limit=40', { headers:{'Authorization':'Bearer '+token} });
+        const data = await res.json();
+        const urls = [];
+        (data.history||[]).forEach(item => { const u = item.supabaseUrl||item.originalUrl; if(u) urls.push(u); });
+        if(!urls.length) {
+            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-image mb-2 text-xl block" style="color:rgba(255,255,255,0.1)"></i>Nicio imagine în istoric</div>`;
+            return;
+        }
+        grid.innerHTML = urls.map(url => `
+            <div onclick="selectFrameFromHistory('${escHtml(url)}')" style="aspect-ratio:1;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;border:2px solid transparent;transition:all 0.18s;background:#0a0a16" onmouseover="this.style.borderColor='rgba(99,102,241,0.6)';this.style.transform='scale(1.03)'" onmouseout="this.style.borderColor='transparent';this.style.transform='scale(1)'">
+                <img src="${url}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.display='none'">
+            </div>`).join('');
+    } catch(e) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(248,113,113,0.5);font-size:0.8rem">Eroare la încărcare</div>`;
+    }
+}
+
+async function selectFrameFromHistory(url) {
+    const token = getToken();
+    try {
+        const proxyUrl = `/api/media/proxy-download?url=${encodeURIComponent(url)}&filename=frame.jpg`;
+        const res = await fetch(proxyUrl, { headers: token ? { 'Authorization': 'Bearer ' + token } : {} });
+        if(!res.ok) throw new Error('fail');
+        const blob = await res.blob();
+        const file = new File([blob], `frame_${Date.now()}.jpg`, { type: blob.type });
+        applyFrameFile(_framePickerSlot, file, url);
+    } catch(e) {
+        toast('Nu s-a putut încărca imaginea. Încearcă upload manual.');
+    }
+    closeFramePicker();
+}
+
+function handleFramePickerUpload(e) {
+    const file = e.target.files[0]; if(!file) return;
+    const url = URL.createObjectURL(file);
+    applyFrameFile(_framePickerSlot, file, url);
+    e.target.value = '';
+    closeFramePicker();
+}
+
+function applyFrameFile(slot, file, previewUrl) {
+    if(slot === 'start') {
+        startFrameFile = file;
+        document.getElementById('start-frame-img').src = previewUrl;
+        document.getElementById('start-frame-preview').classList.remove('hidden');
+        document.getElementById('start-frame-zone').classList.add('hidden');
+    } else {
+        endFrameFile = file;
+        document.getElementById('end-frame-img').src = previewUrl;
+        document.getElementById('end-frame-preview').classList.remove('hidden');
+        document.getElementById('end-frame-zone').classList.add('hidden');
+    }
+}
+
 document.addEventListener('keydown', e => {
-    if(e.key==='Escape' && document.getElementById('refs-picker-modal').style.display==='flex') closeRefsPicker();
+    if(e.key==='Escape' && document.getElementById('frame-picker-modal')?.style.display==='flex') closeFramePicker();
 });
 </script>
+
+<!-- FRAME PICKER MODAL -->
+<div id="frame-picker-modal" style="display:none;position:fixed;inset:0;background:rgba(4,4,12,0.92);backdrop-filter:blur(24px);z-index:260000;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s" onclick="closeFramePicker(event)">
+    <div onclick="event.stopPropagation()" style="background:linear-gradient(160deg,#111120 0%,#0c0c1a 100%);border:1px solid rgba(255,255,255,0.08);border-radius:28px;width:92%;max-width:580px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 40px 80px -10px rgba(0,0,0,0.8),0 0 0 1px rgba(99,102,241,0.12)">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0">
+            <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,rgba(99,102,241,0.3),rgba(52,211,153,0.2));border:1px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center">
+                    <i class="fa-solid fa-image" style="color:rgba(165,168,255,0.9);font-size:0.9rem"></i>
+                </div>
+                <div>
+                    <h3 id="frame-picker-title" style="font-size:0.95rem;font-weight:900;color:white;margin:0">Start Frame</h3>
+                    <p style="font-size:0.63rem;color:rgba(255,255,255,0.3);margin:0;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">Alege o imagine</p>
+                </div>
+            </div>
+            <button onclick="closeFramePicker()" style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);color:rgba(255,255,255,0.45);cursor:pointer;display:flex;align-items:center;justify-content:center" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <!-- Upload -->
+        <div style="padding:14px 24px 0;flex-shrink:0">
+            <input type="file" id="frame-picker-file" class="hidden" accept="image/*" onchange="handleFramePickerUpload(event)">
+            <button onclick="document.getElementById('frame-picker-file').click()" style="width:100%;padding:12px;border-radius:14px;border:1.5px dashed rgba(99,102,241,0.4);background:rgba(99,102,241,0.05);color:rgba(165,168,255,0.85);font-size:0.84rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s" onmouseover="this.style.background='rgba(99,102,241,0.12)'" onmouseout="this.style.background='rgba(99,102,241,0.05)'">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Încarcă de pe PC
+            </button>
+        </div>
+        <!-- Divider -->
+        <div style="padding:12px 24px 8px;flex-shrink:0;display:flex;align-items:center;gap:10px">
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></div>
+            <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.2)">Din Istoric</span>
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></div>
+        </div>
+        <!-- Grid -->
+        <div style="flex:1;overflow-y:auto;padding:0 24px 20px" class="no-scrollbar">
+            <div id="frame-picker-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
