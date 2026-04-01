@@ -1,0 +1,977 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const mongoose = require('mongoose');
+const sharp = require('sharp');
+sharp.concurrency(1);
+const multer = require('multer');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+
+// ✅ Auth centralizat prin HUB
+const { authenticate, hubAPI } = require('./hub-auth');
+
+// ✅ Construiește multipart/form-data manual cu Buffer nativ Node.js
+function buildMultipartBody(fields, files) {
+    const boundary = '----ViralioBoundary' + Math.random().toString(36).substring(2);
+    const parts = [];
+
+    for (const [name, value] of Object.entries(fields)) {
+        parts.push(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}`);
+    }
+
+    for (const { fieldname, buffer, mimetype, filename } of files) {
+        const header = `--${boundary}\r\nContent-Disposition: form-data; name="${fieldname}"; filename="${filename}"\r\nContent-Type: ${mimetype}\r\n\r\n`;
+        parts.push({ header, buffer });
+    }
+
+    const buffers = [];
+    for (const part of parts) {
+        if (typeof part === 'string') {
+            buffers.push(Buffer.from(part + '\r\n', 'utf8'));
+        } else {
+            buffers.push(Buffer.from(part.header, 'utf8'));
+            buffers.push(part.buffer);
+            buffers.push(Buffer.from('\r\n', 'utf8'));
+        }
+    }
+    buffers.push(Buffer.from(`--${boundary}--\r\n`, 'utf8'));
+
+    return { body: Buffer.concat(buffers), contentType: `multipart/form-data; boundary=${boundary}` };
+}
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024, files: 5 }
+});
+
+app.use(cors({ origin: '*' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ══════════════════════════════════════════════════════════════
+// ██ R2 STORAGE
+// ══════════════════════════════════════════════════════════════
+const r2 = new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+});
+
+const uploadToR2 = async (buffer, fileName, contentType) => {
+    await r2.send(new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME, Key: fileName, Body: buffer, ContentType: contentType,
+    }));
+    return `${process.env.R2_PUBLIC_URL}/${fileName}`;
+};
+
+const validateImageForVideo = async (buffer, mimetype, label = 'imagine') => {
+    try {
+        const meta = await sharp(buffer).metadata();
+        const sizeKB = Math.round(buffer.length / 1024);
+        console.log(`[Video] 📸 ${label}: ${meta.width}x${meta.height}px, ${meta.format}, ${sizeKB}KB`);
+
+        const issues = [];
+        if (meta.width < 128 || meta.height < 128) issues.push(`prea mică (${meta.width}x${meta.height}px, minim 128x128)`);
+        if (buffer.length > 15 * 1024 * 1024) issues.push(`prea mare (${sizeKB}KB, max ~15MB)`);
+        const allowed = ['jpeg', 'png', 'webp', 'gif'];
+        if (!allowed.includes(meta.format)) issues.push(`format nesuportat (${meta.format})`);
+
+        if (issues.length > 0) {
+            console.warn(`[Video] ⚠️ Probleme imagine ${label}: ${issues.join(', ')}`);
+            return { valid: false, reason: issues.join(', '), meta };
+        }
+        return { valid: true, meta };
+    } catch (e) {
+        console.error(`[Video] ❌ Nu pot citi imaginea ${label}: ${e.message}`);
+        return { valid: false, reason: 'imaginea nu poate fi citită sau e coruptă' };
+    }
+};
+
+const compressForVideo = async (buffer, mimetype) => {
+    try {
+        const compressed = await sharp(buffer)
+            .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85 }).toBuffer();
+        console.log(`[Video] Comprimat: ${buffer.length} → ${compressed.length} bytes`);
+        return { buffer: compressed, mimetype: 'image/jpeg' };
+    } catch (e) {
+        console.warn(`[Video] Comprimare eșuată, trimit original: ${e.message}`);
+        return { buffer, mimetype };
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+// ██ MONGODB — DOAR History + Log (NU Users!)
+// ══════════════════════════════════════════════════════════════
+if (process.env.MONGO_URI) {
+    mongoose.connect(process.env.MONGO_URI)
+        .then(() => console.log('✅ Media Studio conectat la MongoDB (history/logs)!'))
+        .catch(err => console.error('❌ Eroare MongoDB:', err));
+}
+
+const HistorySchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    type: { type: String, enum: ['image', 'video'], required: true },
+    originalUrl: String, supabaseUrl: String, prompt: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const History = mongoose.models.History || mongoose.model('History', HistorySchema);
+
+const LogSchema = new mongoose.Schema({
+    userEmail: { type: String, required: true },
+    type: { type: String, enum: ['image', 'video'], required: true },
+    count: { type: Number, required: true },
+    cost: { type: Number, required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+const Log = mongoose.models.Log || mongoose.model('Log', LogSchema);
+
+// ══════════════════════════════════════════════════════════════
+// ██ AUTH ROUTES — proxy către HUB
+// ══════════════════════════════════════════════════════════════
+app.post('/api/auth/google', async (req, res) => {
+    try {
+        const response = await fetch(`${process.env.HUB_URL}/api/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+        });
+        const data = await response.json();
+        res.status(response.status).json(data);
+    } catch (e) {
+        res.status(500).json({ error: 'Nu pot comunica cu serverul principal.' });
+    }
+});
+
+app.get('/api/auth/me', authenticate, async (req, res) => {
+    res.json({ user: req.user });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ██ ADMIN — verificare prin HUB user info
+// ══════════════════════════════════════════════════════════════
+const ADMIN_EMAILS = ['banicualex3@gmail.com'];
+const authenticateAdmin = async (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: "Acces interzis!" });
+    try {
+        // Verificăm token prin HUB
+        const result = await fetch(`${process.env.HUB_URL}/api/internal/verify-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.INTERNAL_API_KEY },
+            body: JSON.stringify({ token }),
+        });
+        const data = await result.json();
+        if (!result.ok) return res.status(403).json({ error: "Sesiune invalidă." });
+        if (!ADMIN_EMAILS.some(e => e.toLowerCase() === data.user.email.toLowerCase())) {
+            return res.status(403).json({ error: "Ai greșit contul?" });
+        }
+        req.userId = data.userId;
+        req.user = data.user;
+        next();
+    } catch (e) {
+        return res.status(401).json({ error: "Sesiune invalidă." });
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+// ██ HELPERS AI
+// ══════════════════════════════════════════════════════════════
+const MODEL_PRICES = {
+    'gemini-flash': 1, 'nano-banana-pro-1k': 1,
+    'gemini-pro': 2,   'nano-banana-pro-2k': 2,
+    'veo3.1': 2,
+    'grok-480p': 2,    'grok-720p': 3,
+};
+
+const fetchWithRetry = async (url, options, maxRetries = 6, delayMs = 5000) => {
+    for (let i = 0; i < maxRetries; i++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (response.ok) return response;
+            const text = await response.text();
+            if (response.status === 429 || response.status === 503 || text.toLowerCase().includes('exhausted')) {
+                console.warn(`[AI] Aglomerat (${response.status}), reîncerc ${i+1}/${maxRetries}`);
+                await new Promise(r => setTimeout(r, delayMs));
+                delayMs *= 2; continue;
+            }
+            throw new Error(text);
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') throw new Error("Timpul de așteptare a expirat.");
+            if (i < maxRetries - 1) {
+                await new Promise(r => setTimeout(r, delayMs));
+                delayMs *= 2;
+            } else throw error;
+        }
+    }
+    throw new Error("Sistemul AI este suprasolicitat.");
+};
+
+let imageQueueRunning = false;
+const imageQueue = [];
+const enqueueImageRequest = (fn) => new Promise((resolve, reject) => {
+    imageQueue.push({ fn, resolve, reject });
+    processImageQueue();
+});
+const processImageQueue = async () => {
+    if (imageQueueRunning || imageQueue.length === 0) return;
+    imageQueueRunning = true;
+    const { fn, resolve, reject } = imageQueue.shift();
+    try { resolve(await fn()); }
+    catch (e) { reject(e); }
+    finally { imageQueueRunning = false; setTimeout(processImageQueue, 2000); }
+};
+
+// ══════════════════════════════════════════════════════════════
+// ██ IMAGINI
+// ══════════════════════════════════════════════════════════════
+app.post('/api/media/image', authenticate, upload.array('ref_images', 5), async (req, res) => {
+    const startTime = Date.now();
+    const elapsed = () => `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    let clientAborted = false;
+    res.on('close', () => { if (!res.writableEnded) { clientAborted = true; } });
+
+    try {
+        const { prompt, aspect_ratio, number_of_images, model_id } = req.body;
+        let finalPrompt = prompt;
+        const count = Math.min(parseInt(number_of_images) || 1, 4);
+        const costPerImg = MODEL_PRICES[model_id] || 1;
+        const totalCost = count * costPerImg;
+
+        // Verificăm credite prin HUB
+        const balance = await hubAPI.checkCredits(req.userId);
+        if (balance.credits < totalCost) {
+            res.write(`data: ${JSON.stringify({ error: `Fonduri insuficiente! Ai nevoie de ${totalCost} credite.` })}\n\n`);
+            res.end(); return;
+        }
+
+        const isFlash = (model_id === 'gemini-flash' || model_id === 'nano-banana-pro-1k');
+        const MODEL_ID = isFlash ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
+
+        console.log(`[Imagini] START | model=${MODEL_ID} count=${count} cost=${totalCost} | ${req.user.email}`);
+        res.write(`data: ${JSON.stringify({ status: `Se pregătește generarea a ${count} imagini...` })}\n\n`);
+
+        let baseParts = [];
+        if (req.files && req.files.length > 0) {
+            for (let i = 0; i < req.files.length; i++) {
+                baseParts.push({ inlineData: { mimeType: req.files[i].mimetype, data: req.files[i].buffer.toString('base64') } });
+                finalPrompt = finalPrompt.replace(new RegExp(`@img${i+1}`, 'g'), '').trim();
+            }
+            finalPrompt += `\n\n[Instruction: Use the provided images as exact character and style references. Aspect Ratio: ${aspect_ratio}]`;
+        } else {
+            finalPrompt += `\n\n[Instruction: Aspect Ratio: ${aspect_ratio}]`;
+        }
+        baseParts.push({ text: finalPrompt });
+
+        const endpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/${MODEL_ID}:generateContent?key=${process.env.VERTEX_API_KEY}`;
+
+        const buildRequestBody = (seed) => {
+            const body = {
+                contents: [{ role: "user", parts: baseParts }],
+                generationConfig: { candidateCount: 1, seed }
+            };
+            if (isFlash) {
+                body.generationConfig.responseModalities = ["IMAGE"];
+                body.generationConfig.imageConfig = { aspectRatio: aspect_ratio || "1:1", imageSize: "1K" };
+                body.safetySettings = [
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }
+                ];
+            }
+            return body;
+        };
+
+        const urls = [];
+        let completedCount = 0;
+
+        const imagePromises = Array.from({ length: count }, async (_, idx) => {
+            if (clientAborted) return;
+            const seed = Math.floor(Math.random() * 999999);
+            let attempts = 0;
+            const maxAttempts = 3;
+
+            while (attempts < maxAttempts) {
+                if (clientAborted) return;
+                attempts++;
+                try {
+                    const response = await fetchWithRetry(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(buildRequestBody(seed + attempts * 1000))
+                    });
+                    const rawText = await response.text();
+                    let data;
+                    try { data = JSON.parse(rawText); } catch { continue; }
+
+                    if (data.candidates) {
+                        for (const candidate of data.candidates) {
+                            if (candidate.content?.parts) {
+                                for (const part of candidate.content.parts) {
+                                    if (part.inlineData?.data) {
+                                        const mime = part.inlineData.mimeType || 'image/png';
+                                        const ext = mime.split('/')[1] || 'png';
+                                        const buffer = Buffer.from(part.inlineData.data, 'base64');
+                                        const fileName = `generated/${req.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+                                        try {
+                                            const publicUrl = await uploadToR2(buffer, fileName, mime);
+                                            urls.push(publicUrl);
+                                            completedCount++;
+                                            console.log(`[Imagini] ✅ ${completedCount}/${count} gata: ${publicUrl}`);
+                                            if (!clientAborted) res.write(`data: ${JSON.stringify({ status: `${completedCount} din ${count} imagini gata...` })}\n\n`);
+                                            return;
+                                        } catch (uploadErr) {
+                                            console.error(`[Imagini] ❌ R2 upload eșuat: ${uploadErr.message}`);
+                                        }
+                                    }
+                                }
+                            }
+                            const reason = candidate.finishReason;
+                            if (reason && reason !== 'STOP') {
+                                console.warn(`[Imagini] Imagine ${idx+1} filtrată (${reason}), reîncerc...`);
+                                break;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[Imagini] Eroare imagine ${idx+1}, attempt ${attempts}: ${err.message}`);
+                }
+                await new Promise(r => setTimeout(r, 1500));
+            }
+        });
+
+        await Promise.allSettled(imagePromises);
+        if (clientAborted) return;
+
+        if (urls.length === 0) {
+            res.write(`data: ${JSON.stringify({ error: "Imaginile nu au putut fi generate. Promptul poate conține elemente blocate." })}\n\n`);
+            res.write('data: [DONE]\n\n'); res.end(); return;
+        }
+
+        // Scădem creditele prin HUB
+        const actualCost = urls.length * costPerImg;
+        await Log.create({ userEmail: req.user.email, type: 'image', count: urls.length, cost: actualCost }).catch(() => {});
+        try { await hubAPI.useCredits(req.userId, actualCost); } catch (e) { console.error('Eroare scădere credite:', e.message); }
+
+        console.log(`[Imagini] ✅ ${urls.length}/${count} imagini gata în ${elapsed()} | -${actualCost} cr | ${req.user.email}`);
+
+        res.write(`data: ${JSON.stringify({ file_urls: urls })}\n\n`);
+        res.write('data: [DONE]\n\n'); res.end();
+
+    } catch (e) {
+        console.error(`[Imagini] ❌ Eroare: ${e.message}`);
+        if (!clientAborted) {
+            res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
+            res.write('data: [DONE]\n\n'); res.end();
+        }
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+// ██ VIDEO
+// ══════════════════════════════════════════════════════════════
+// Video folosește DubVoice API (aceeași cheie ca și Grok)
+
+const toVideoRatio = (ratio) => {
+    const portrait = ['9:16', '4:5', '3:4', '2:3'];
+    return portrait.includes(ratio) ? 'VIDEO_ASPECT_RATIO_PORTRAIT' : 'VIDEO_ASPECT_RATIO_LANDSCAPE';
+};
+
+const DISCORD_CONTACT = 'alexcaba pe Discord (discord.gg/h8Ah6VKDzm)';
+
+const mapVideoError = (msg) => {
+    if (!msg) return 'Eroare necunoscută la generarea video.';
+    if (msg.includes('PUBLIC_ERROR_SEXUAL')) return '🚫 Conținutul a fost blocat: elemente inadecvate.';
+    if (msg.includes('UNSAFE_GENERATION') || msg.includes('unsafe') || msg.includes('PUBLIC_ERROR_DANGER_FILTER'))
+        return '🚫 Conținut blocat de filtrul de siguranță. Modifică promptul.';
+    if (msg.includes('AUDIO_FILTERED')) return '🚫 Audio-ul filtrat — conține elemente inadecvate.';
+    if (msg.includes('PUBLIC_ERROR_IP_INPUT_IMAGE')) return '🚫 Imaginea nu este acceptată. Încearcă cu alta.';
+    if (msg.includes('TIMED_OUT') || msg.includes('TIMEOUT') || msg.includes('PUBLIC_ERROR_VIDEO_GENERATION_TIMED_OUT'))
+        return 'Generarea a durat prea mult. Reîncearcă.';
+    if (msg.includes('quota') || msg.includes('QUOTA') || msg.includes('rate limit') || msg.includes('RATE_LIMIT') || msg.includes('insufficient') || msg.includes('balance') || msg.includes('credit'))
+        return `⚠️ Capacitatea serverelor AI atinsă. Contactează ${DISCORD_CONTACT}`;
+    if (msg.includes('Create video error') || msg.includes('Create video failed'))
+        return '⚠️ Serverele AI au respins generarea. Posibile cauze: imaginea conține fețe celebre, sau promptul include oameni celebrii. Încearcă cu o altă imagine sau modifică promptul.';
+    // Erori de socket/retea - nu le arata tehnic la user
+    if (msg === 'terminated' || msg.includes('UND_ERR') || msg.includes('other side closed') || msg.includes('Stream inchis'))
+        return '⚠️ Conexiunea cu serverele AI a fost intrerupta dupa toate reincercarile. Te rugam sa reincerci.';
+    return msg.replace(/genaipro/gi, 'serverul AI').replace(/dubvoice/gi, 'serverul AI').replace(/\bGrok\b/gi, 'serverul video').replace(/\bVeo\s*3?\b/gi, 'serverul video');
+};
+
+const isContentBlockedError = (msg) => {
+    if (!msg) return false;
+    return msg.includes('PUBLIC_ERROR_DANGER_FILTER') || msg.includes('UNSAFE_GENERATION') ||
+           msg.includes('AUDIO_FILTERED') || msg.includes('PUBLIC_ERROR_SEXUAL') || msg.includes('PUBLIC_ERROR_IP_INPUT_IMAGE');
+};
+
+const isQuotaError = (msg) => {
+    if (!msg) return false;
+    return msg.includes('quota') || msg.includes('QUOTA') || msg.includes('rate limit') ||
+           msg.includes('RATE_LIMIT') || msg.includes('insufficient') || msg.includes('balance') || msg.toLowerCase().includes('credit');
+};
+
+const isNonRetryableError = (msg) => isContentBlockedError(msg) || isQuotaError(msg);
+
+const parseVideoSSE = (apiRes, emailTag, onStatus) => {
+    return new Promise((resolve, reject) => {
+        const reader = apiRes.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        let currentEvent = '';
+        let lastLoggedStatus = '';
+        let settled = false;
+
+        const globalTimeout = setTimeout(() => {
+            if (settled) return; settled = true;
+            try { reader.cancel(); } catch (_) {}
+            reject(new Error('PUBLIC_ERROR_VIDEO_GENERATION_TIMED_OUT'));
+        }, 360000);
+
+        let activityTimeout = setTimeout(() => {
+            if (settled) return; settled = true;
+            clearTimeout(globalTimeout);
+            try { reader.cancel(); } catch (_) {}
+            reject(new Error('PUBLIC_ERROR_VIDEO_GENERATION_TIMED_OUT'));
+        }, 180000);
+
+        const resetActivity = () => {
+            clearTimeout(activityTimeout);
+            activityTimeout = setTimeout(() => {
+                if (settled) return; settled = true;
+                clearTimeout(globalTimeout);
+                try { reader.cancel(); } catch (_) {}
+                reject(new Error('PUBLIC_ERROR_VIDEO_GENERATION_TIMED_OUT'));
+            }, 180000);
+        };
+
+        const done = (urls) => {
+            if (settled) return; settled = true;
+            clearTimeout(globalTimeout); clearTimeout(activityTimeout);
+            resolve(urls);
+        };
+
+        const fail = (err) => {
+            if (settled) return; settled = true;
+            clearTimeout(globalTimeout); clearTimeout(activityTimeout);
+            try { reader.cancel(); } catch (_) {}
+            reject(err);
+        };
+
+        const pump = async () => {
+            try {
+                while (true) {
+                    let result;
+                    try { result = await reader.read(); }
+                    catch (readErr) { if (!settled) fail(new Error('terminated')); return; }
+                    if (!result) { if (!settled) fail(new Error('terminated')); return; }
+                    const { done: streamDone, value } = result;
+                    if (streamDone) break;
+
+                    buf += dec.decode(value, { stream: true });
+                    resetActivity();
+                    const lines = buf.split('\n');
+                    buf = lines.pop();
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed) { currentEvent = ''; continue; }
+                        if (trimmed.startsWith('event:')) { currentEvent = trimmed.slice(6).trim(); continue; }
+                        if (!trimmed.startsWith('data:')) continue;
+                        const raw = trimmed.slice(5).trim();
+
+                        if (currentEvent === 'video_generation_status') {
+                            if (raw !== lastLoggedStatus) { lastLoggedStatus = raw; if (onStatus) onStatus(raw); }
+                            continue;
+                        }
+                        if (currentEvent === 'error') {
+                            let rawMsg = raw;
+                            try { const errObj = JSON.parse(raw); rawMsg = errObj.error || errObj.message || raw; } catch (_) {}
+                            return fail(new Error(rawMsg));
+                        }
+                        if (currentEvent === 'video_generation_complete') {
+                            try {
+                                const parsed = JSON.parse(raw);
+                                const items = Array.isArray(parsed) ? parsed : [parsed];
+                                const urls = [];
+                                items.forEach(item => {
+                                    if (item.file_url) urls.push(item.file_url);
+                                    if (item.video_url) urls.push(item.video_url);
+                                    if (item.url) urls.push(item.url);
+                                    if (Array.isArray(item.file_urls)) urls.push(...item.file_urls);
+                                });
+                                if (urls.length > 0) return done(urls);
+                            } catch (_) {}
+                        }
+                        if (raw.startsWith('{') || raw.startsWith('[')) {
+                            try {
+                                const obj = JSON.parse(raw);
+                                const urls = [];
+                                if (obj.file_url) urls.push(obj.file_url);
+                                if (obj.video_url) urls.push(obj.video_url);
+                                if (obj.url) urls.push(obj.url);
+                                if (Array.isArray(obj.file_urls)) urls.push(...obj.file_urls);
+                                if (urls.length > 0) return done(urls);
+                                if (obj.error) return fail(new Error(obj.error));
+                            } catch (_) {}
+                        }
+                    }
+                }
+                if (!settled) fail(new Error('Stream închis fără rezultat'));
+            } catch (e) { if (!settled) fail(e); }
+        };
+
+        pump().catch(err => { if (!settled) fail(err); });
+    });
+};
+
+const uploadImageToR2 = async (file, userId, prefix = 'refs') => {
+    const ext = file.mimetype.split('/')[1] || 'jpg';
+    const fileName = `${prefix}/vid_${userId}_${Date.now()}_${Math.random().toString(36).substring(5)}.${ext}`;
+    return await uploadToR2(file.buffer, fileName, file.mimetype);
+};
+
+app.post('/api/media/video',
+    authenticate,
+    upload.fields([
+        { name: 'start_image', maxCount: 1 },
+        { name: 'end_image',   maxCount: 1 },
+        { name: 'ref_images',  maxCount: 5 }
+    ]),
+    async (req, res) => {
+        const startTime = Date.now();
+        const elapsed = () => `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        let clientAborted = false;
+        res.on('close', () => { if (!res.writableEnded) clientAborted = true; });
+
+        // Keep-alive: trimite un comentariu SSE la fiecare 20s ca browserul sa nu taie conexiunea
+        const keepAliveInterval = setInterval(() => {
+            if (!res.writableEnded && !clientAborted) {
+                res.write(': keep-alive\n\n');
+            } else {
+                clearInterval(keepAliveInterval);
+            }
+        }, 20000);
+        const clearKeepAlive = () => clearInterval(keepAliveInterval);
+
+        const sendStatus = (status) => { if (!res.writableEnded && !clientAborted) res.write(`data: ${JSON.stringify({ status })}\n\n`); };
+        const sendDone = (urls) => {
+            clearKeepAlive();
+            if (!res.writableEnded && !clientAborted) {
+                res.write(`data: ${JSON.stringify({ file_urls: urls })}\n\n`);
+                res.write('data: [DONE]\n\n'); res.end();
+            }
+        };
+        const sendError = (msg) => {
+            clearKeepAlive();
+            if (!res.writableEnded && !clientAborted) {
+                res.write(`data: ${JSON.stringify({ error: mapVideoError(msg) })}\n\n`);
+                res.write('data: [DONE]\n\n'); res.end();
+            }
+        };
+
+        try {
+            const { prompt, aspect_ratio, number_of_videos, model_id } = req.body;
+            let finalPrompt = prompt;
+            const count = parseInt(number_of_videos) || 1;
+            const costPerVid = MODEL_PRICES[model_id] || 3;
+            const totalCost = count * costPerVid;
+            const videoRatio = toVideoRatio(aspect_ratio);
+
+            // Verificăm credite prin HUB
+            const balance = await hubAPI.checkCredits(req.userId);
+            if (balance.credits < totalCost) return sendError(`Fonduri insuficiente! Ai nevoie de ${totalCost} credite.`);
+
+            const startImageFile = req.files?.['start_image']?.[0] || null;
+            const endImageFile   = req.files?.['end_image']?.[0]   || null;
+            const refImages      = req.files?.['ref_images']        || [];
+            const hasFrames = startImageFile || endImageFile;
+
+            // Validare imagini înainte de a trimite la API
+            if (startImageFile) {
+                const v = await validateImageForVideo(startImageFile.buffer, startImageFile.mimetype, 'start_image');
+                if (!v.valid) return sendError(`Imaginea de start are probleme: ${v.reason}. Te rugăm să folosești o altă imagine (JPEG/PNG, minim 128x128px).`);
+            }
+            if (endImageFile) {
+                const v = await validateImageForVideo(endImageFile.buffer, endImageFile.mimetype, 'end_image');
+                if (!v.valid) return sendError(`Imaginea de final are probleme: ${v.reason}. Te rugăm să folosești o altă imagine (JPEG/PNG, minim 128x128px).`);
+            }
+
+            if (refImages.length > 0) {
+                for (let i = 0; i < refImages.length; i++) {
+                    const url = await uploadImageToR2(refImages[i], req.userId, 'refs');
+                    finalPrompt = finalPrompt.replace(new RegExp(`@img${i + 1}`, 'g'), url);
+                }
+            }
+
+            const emailTag = req.user.email;
+
+            // ══════════════════════════════════════════════
+            // ██ GROK (DubVoice API) — polling
+            // ══════════════════════════════════════════════
+            if (model_id === 'grok-480p' || model_id === 'grok-720p') {
+                const DUBVOICE_API_KEY = process.env.DUBVOICE_API_KEY;
+                const resolution = model_id === 'grok-720p' ? '720p' : '480p';
+                const grokAspect = ['9:16','3:4','2:3'].includes(aspect_ratio) ? '9:16' : '16:9';
+                const duration = 6;
+
+                sendStatus('Se trimite cererea video...');
+                console.log(`[Grok] START | res=${resolution} | ${emailTag}`);
+
+                // ── POST inițial ──────────────────────────────────────────────
+                let postRes;
+                try {
+                    postRes = await fetch('https://www.dubvoice.ai/api/video/grok', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${DUBVOICE_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ prompt: finalPrompt, duration, resolution, aspect_ratio: grokAspect })
+                    });
+                } catch (fetchErr) {
+                    return sendError('Eroare de rețea. Te rugăm să reîncerci.');
+                }
+
+                const postData = await postRes.json().catch(() => ({}));
+                console.log(`[Grok] POST status=${postRes.status} | keys=${Object.keys(postData).join(',')} | full=${JSON.stringify(postData).substring(0, 600)}`);
+
+                if (!postRes.ok) {
+                    return sendError(postData.error || `HTTP ${postRes.status}`);
+                }
+
+                // Dacă POST returnează direct video_url (generare sincronă)
+                const directUrl = postData.video_url || postData.file_url || postData.url || postData.output_url ||
+                    (Array.isArray(postData.output) ? postData.output[0] : null);
+                if (directUrl) {
+                    await Log.create({ userEmail: req.user.email, type: 'video', count, cost: totalCost }).catch(() => {});
+                    try { await hubAPI.useCredits(req.userId, totalCost); } catch (e) { console.error('Eroare scădere credite Grok:', e.message); }
+                    console.log(`[Grok] ✅ Done direct în ${elapsed()} | ${emailTag}`);
+                    return sendDone([directUrl]);
+                }
+
+                // prediction_id sau task_id pentru polling
+                const predictionId = postData.prediction_id || postData.id || postData.task_id;
+                if (!predictionId) {
+                    console.error(`[Grok] ❌ Niciun ID în răspuns: ${JSON.stringify(postData)}`);
+                    return sendError('Răspuns invalid de la server. Te rugăm să reîncerci.');
+                }
+
+                console.log(`[Grok] Polling id=${predictionId} | ${emailTag}`);
+                sendStatus('Se generează videoclipul...');
+
+                const MAX_POLLS = 70;    // max ~5.8 min (70 × 5s)
+                const POLL_INTERVAL = 5000;
+
+                // Încercăm ambele endpoint-uri de poll posibile
+                const pollUrls = [
+                    `https://www.dubvoice.ai/api/video/grok?prediction_id=${predictionId}`,
+                    `https://www.dubvoice.ai/api/v1/tts/${predictionId}`,
+                ];
+
+                for (let poll = 1; poll <= MAX_POLLS; poll++) {
+                    if (clientAborted) return;
+                    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+                    if (clientAborted) return;
+
+                    // Folosim primul endpoint primele 5 poll-uri, apoi alternam dacă nu vine nimic
+                    const pollUrl = poll <= 5
+                        ? pollUrls[0]
+                        : (poll % 2 === 0 ? pollUrls[0] : pollUrls[1]);
+
+                    let pollRes;
+                    try {
+                        pollRes = await fetch(pollUrl, {
+                            headers: { 'Authorization': `Bearer ${DUBVOICE_API_KEY}` }
+                        });
+                    } catch (pollErr) {
+                        console.warn(`[Grok] Poll ${poll} eroare rețea: ${pollErr.message}`);
+                        continue;
+                    }
+
+                    const pollData = await pollRes.json().catch(() => ({}));
+                    const status = pollData.status;
+
+                    if (poll <= 3 || poll % 10 === 0) {
+                        console.log(`[Grok] Poll ${poll}/${MAX_POLLS} url=${pollUrl.includes('v1') ? 'v1' : 'video'} status=${status} keys=${Object.keys(pollData).join(',')} full=${JSON.stringify(pollData).substring(0, 400)}`);
+                    } else {
+                        console.log(`[Grok] Poll ${poll}/${MAX_POLLS} status=${status} | ${emailTag}`);
+                    }
+
+                    // Orice câmp care ar putea conține URL-ul video
+                    const videoUrl = pollData.video_url || pollData.file_url || pollData.url || pollData.output_url || pollData.result ||
+                        (Array.isArray(pollData.output) ? pollData.output[0] : null) ||
+                        (pollData.result && typeof pollData.result === 'string' ? pollData.result : null);
+
+                    // Succes cu URL
+                    if (videoUrl && typeof videoUrl === 'string' && (videoUrl.startsWith('http') || videoUrl.startsWith('/'))) {
+                        await Log.create({ userEmail: req.user.email, type: 'video', count, cost: totalCost }).catch(() => {});
+                        try { await hubAPI.useCredits(req.userId, totalCost); } catch (e) { console.error('Eroare scădere credite Grok:', e.message); }
+                        console.log(`[Grok] ✅ Done în ${elapsed()} poll=${poll} url=${videoUrl} | ${emailTag}`);
+                        return sendDone([videoUrl]);
+                    }
+
+                    if (status === 'failed' || status === 'canceled' || status === 'error') {
+                        const reason = pollData.error || pollData.detail || pollData.message || status;
+                        console.error(`[Grok] ❌ ${reason} | ${emailTag}`);
+                        return sendError(`Generarea video a eșuat: ${reason}`);
+                    }
+
+                    const elapsed_s = Math.round(poll * POLL_INTERVAL / 1000);
+                    sendStatus(`Se generează video... (~${elapsed_s}s)`);
+                }
+
+                console.error(`[Grok] ❌ Timeout după ${MAX_POLLS} poll-uri | ${emailTag}`);
+                return sendError('Timeout: generarea video a durat prea mult. Reîncearcă.');
+            }
+
+            // ══════════════════════════════════════════════
+            // ██ VEO (DubVoice API) — polling
+            // ══════════════════════════════════════════════
+            {
+                const DUBVOICE_API_KEY = process.env.DUBVOICE_API_KEY;
+
+                sendStatus('Se trimite cererea video...');
+                console.log(`[Veo] START | ${emailTag}`);
+
+                // ── POST inițial ──────────────────────────────────────────────
+                // Încercăm mai multe endpoint-uri posibile pentru Veo cu API key
+                const veoEndpoints = [
+                    'https://www.dubvoice.ai/api/v1/video',      // API v1 (API key compatible)
+                    'https://www.dubvoice.ai/api/video',          // endpoint standard
+                ];
+                const authHeaders = {
+                    'Authorization': `Bearer ${DUBVOICE_API_KEY}`,
+                    'X-API-Key': DUBVOICE_API_KEY,
+                    'Content-Type': 'application/json'
+                };
+                const veoBody = JSON.stringify({ prompt: finalPrompt });
+
+                let postRes = null;
+                let postData = {};
+                let usedEndpoint = '';
+
+                for (const endpoint of veoEndpoints) {
+                    console.log(`[Veo] Încerc endpoint: ${endpoint} | ${emailTag}`);
+                    try {
+                        postRes = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: authHeaders,
+                            body: veoBody
+                        });
+                        postData = await postRes.json().catch(() => ({}));
+                        console.log(`[Veo] ${endpoint} → status=${postRes.status} | keys=${Object.keys(postData).join(',')} | full=${JSON.stringify(postData).substring(0, 600)}`);
+
+                        if (postRes.status !== 401 && postRes.status !== 404) {
+                            usedEndpoint = endpoint;
+                            break; // Endpoint valid, ieșim din loop
+                        }
+                        console.log(`[Veo] ${endpoint} → ${postRes.status}, încerc următorul...`);
+                    } catch (fetchErr) {
+                        console.warn(`[Veo] ${endpoint} → eroare rețea: ${fetchErr.message}`);
+                        continue;
+                    }
+                }
+
+                if (!postRes || !usedEndpoint) {
+                    console.error(`[Veo] ❌ Niciun endpoint Veo nu a răspuns valid | ${emailTag}`);
+                    return sendError('Serverul video nu este disponibil momentan. Te rugăm să reîncerci.');
+                }
+
+                if (!postRes.ok) {
+                    return sendError(postData.error || `HTTP ${postRes.status}`);
+                }
+
+                // Dacă POST returnează direct video_url (generare sincronă)
+                const directUrl = postData.video_url || postData.file_url || postData.url || postData.output_url ||
+                    (Array.isArray(postData.output) ? postData.output[0] : null);
+                if (directUrl) {
+                    await Log.create({ userEmail: req.user.email, type: 'video', count, cost: totalCost }).catch(() => {});
+                    try { await hubAPI.useCredits(req.userId, totalCost); } catch (e) { console.error('Eroare scădere credite Veo:', e.message); }
+                    console.log(`[Veo] ✅ Done direct în ${elapsed()} | ${emailTag}`);
+                    return sendDone([directUrl]);
+                }
+
+                // prediction_id sau task_id pentru polling
+                const predictionId = postData.prediction_id || postData.id || postData.task_id;
+                if (!predictionId) {
+                    // Dacă nu avem nici URL nici ID, dar avem success, așteptăm cu polling pe quota
+                    console.warn(`[Veo] ⚠️ Niciun ID și niciun URL direct în răspuns: ${JSON.stringify(postData)}`);
+                    // Unele răspunsuri DubVoice Veo returnează direct, dacă nu e ID, tratăm ca eroare
+                    return sendError('Răspuns invalid de la server. Te rugăm să reîncerci.');
+                }
+
+                console.log(`[Veo] Polling id=${predictionId} | ${emailTag}`);
+                sendStatus('Se generează videoclipul...');
+
+                const MAX_POLLS = 80;    // max ~6.6 min (80 × 5s) — Veo poate dura 60-120s
+                const POLL_INTERVAL = 5000;
+
+                // Polling pe endpoint-ul DubVoice
+                const isV1 = usedEndpoint.includes('/api/v1/');
+                const pollUrls = isV1
+                    ? [
+                        `https://www.dubvoice.ai/api/v1/video?action=status&prediction_id=${predictionId}`,
+                        `https://www.dubvoice.ai/api/v1/tts/${predictionId}`,
+                      ]
+                    : [
+                        `https://www.dubvoice.ai/api/video?action=status&prediction_id=${predictionId}`,
+                        `https://www.dubvoice.ai/api/v1/tts/${predictionId}`,
+                      ];
+                const pollHeaders = {
+                    'Authorization': `Bearer ${DUBVOICE_API_KEY}`,
+                    'X-API-Key': DUBVOICE_API_KEY
+                };
+
+                for (let poll = 1; poll <= MAX_POLLS; poll++) {
+                    if (clientAborted) return;
+                    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+                    if (clientAborted) return;
+
+                    const pollUrl = poll <= 5
+                        ? pollUrls[0]
+                        : (poll % 2 === 0 ? pollUrls[0] : pollUrls[1]);
+
+                    let pollRes;
+                    try {
+                        pollRes = await fetch(pollUrl, { headers: pollHeaders });
+                    } catch (pollErr) {
+                        console.warn(`[Veo] Poll ${poll} eroare rețea: ${pollErr.message}`);
+                        continue;
+                    }
+
+                    const pollData = await pollRes.json().catch(() => ({}));
+                    const status = pollData.status;
+
+                    if (poll <= 3 || poll % 10 === 0) {
+                        console.log(`[Veo] Poll ${poll}/${MAX_POLLS} url=${pollUrl.includes('v1') ? 'v1' : 'video'} status=${status} keys=${Object.keys(pollData).join(',')} full=${JSON.stringify(pollData).substring(0, 400)}`);
+                    } else {
+                        console.log(`[Veo] Poll ${poll}/${MAX_POLLS} status=${status} | ${emailTag}`);
+                    }
+
+                    // Orice câmp care ar putea conține URL-ul video
+                    const videoUrl = pollData.video_url || pollData.file_url || pollData.url || pollData.output_url || pollData.result ||
+                        (Array.isArray(pollData.output) ? pollData.output[0] : null) ||
+                        (pollData.result && typeof pollData.result === 'string' ? pollData.result : null);
+
+                    // Succes cu URL
+                    if (videoUrl && typeof videoUrl === 'string' && (videoUrl.startsWith('http') || videoUrl.startsWith('/'))) {
+                        await Log.create({ userEmail: req.user.email, type: 'video', count, cost: totalCost }).catch(() => {});
+                        try { await hubAPI.useCredits(req.userId, totalCost); } catch (e) { console.error('Eroare scădere credite Veo:', e.message); }
+                        console.log(`[Veo] ✅ Done în ${elapsed()} poll=${poll} url=${videoUrl} | ${emailTag}`);
+                        return sendDone([videoUrl]);
+                    }
+
+                    if (status === 'failed' || status === 'canceled' || status === 'error') {
+                        const reason = pollData.error || pollData.detail || pollData.message || status;
+                        console.error(`[Veo] ❌ ${reason} | ${emailTag}`);
+                        return sendError(`Generarea video a eșuat: ${reason}`);
+                    }
+
+                    const elapsed_s = Math.round(poll * POLL_INTERVAL / 1000);
+                    sendStatus(`Se generează video... (~${elapsed_s}s)`);
+                }
+
+                console.error(`[Veo] ❌ Timeout după ${MAX_POLLS} poll-uri | ${emailTag}`);
+                return sendError('Timeout: generarea video a durat prea mult. Reîncearcă.');
+            }
+
+        } catch (e) {
+            console.error(`[Video] ❌ Eroare neașteptată: ${e.message}`);
+            sendError(e.message);
+        }
+    }
+);
+
+// ══════════════════════════════════════════════════════════════
+// ██ ALTE RUTE
+// ══════════════════════════════════════════════════════════════
+app.get('/api/admin/stats', authenticateAdmin, async (req, res) => {
+    try {
+        const logs = await Log.find().sort({ createdAt: -1 }).limit(100);
+        const totalImages = await Log.aggregate([{ $match: { type: 'image' } }, { $group: { _id: null, total: { $sum: "$count" } } }]);
+        const totalVideos = await Log.aggregate([{ $match: { type: 'video' } }, { $group: { _id: null, total: { $sum: "$count" } } }]);
+        res.json({ totalImages: totalImages[0]?.total || 0, totalVideos: totalVideos[0]?.total || 0, recentLogs: logs });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/admin/api-quota', authenticateAdmin, async (req, res) => {
+    res.json({ balance: 0, veoTotal: 0, veoUsed: 0, veoAvail: 0 });
+});
+
+app.get('/api/media/history', authenticate, async (req, res) => {
+    try {
+        const type = req.query.type || 'image';
+        const page = parseInt(req.query.page) || 1;
+        const limit = 80;
+        const skip = (page - 1) * limit;
+        const history = await History.find({ userId: req.userId, type }).sort({ createdAt: -1 }).skip(skip).limit(limit);
+        const total = await History.countDocuments({ userId: req.userId, type });
+        res.json({ history, total, page, pages: Math.ceil(total / limit) });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/media/save-history', authenticate, async (req, res) => {
+    const { urls, type, prompt } = req.body;
+    if (!urls || !urls.length) return res.status(400).json({ error: 'Fără URL-uri.' });
+    try {
+        for (const url of urls) await History.create({ userId: req.userId, type, originalUrl: url, supabaseUrl: url, prompt });
+        res.status(200).json({ message: 'Istoric salvat cu succes' });
+    } catch (err) { res.status(500).json({ error: 'Eroare server' }); }
+});
+
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+
+const APP_VERSION = Date.now().toString();
+app.get('/api/version', (req, res) => { res.json({ version: APP_VERSION }); });
+
+app.get('/api/media/proxy-download', authenticate, async (req, res) => {
+    const { url, filename } = req.query;
+    if (!url) return res.status(400).json({ error: 'URL lipsă' });
+    try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('Fetch failed');
+        const buffer = await r.arrayBuffer();
+        const contentType = r.headers.get('content-type') || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${filename || 'viralio_media'}"`);
+        res.send(Buffer.from(buffer));
+    } catch(e) { res.status(500).json({ error: 'Nu s-a putut descărca fișierul.' }); }
+});
+
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+process.on('uncaughtException', (err) => { console.error('❌ uncaughtException:', err.message); });
+process.on('unhandledRejection', (reason) => {
+    const msg = reason?.message || String(reason);
+    const isKnownSocketError = msg === 'terminated' || msg.includes('UND_ERR_SOCKET') || msg.includes('other side closed') || msg.includes('UND_ERR_CONNECT_TIMEOUT');
+    if (isKnownSocketError) {
+        console.warn(`[Socket] Eroare conexiune ignorată (normală): ${msg}`);
+        return;
+    }
+    console.error('❌ unhandledRejection:', reason);
+});
+
+app.listen(PORT, () => console.log(`🚀 Media Studio rulează pe portul ${PORT}`));
