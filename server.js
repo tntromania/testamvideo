@@ -767,7 +767,13 @@ app.post('/api/media/video',
                     'X-API-Key': DUBVOICE_API_KEY,
                     'Content-Type': 'application/json'
                 };
-                const veoBody = JSON.stringify({ prompt: finalPrompt });
+                // DubVoice Veo: API-ul acceptă doar prompt, așa că adăugăm aspect ratio în prompt
+                const isPortrait = ['9:16','3:4','2:3','4:5'].includes(aspect_ratio);
+                const orientationHint = isPortrait
+                    ? 'Vertical portrait video (9:16 aspect ratio). Film in portrait/vertical orientation.'
+                    : 'Horizontal landscape video (16:9 aspect ratio). Film in landscape/horizontal orientation.';
+                const veoPrompt = `${finalPrompt}\n\n[${orientationHint}]`;
+                const veoBody = JSON.stringify({ prompt: veoPrompt });
 
                 let postRes = null;
                 let postData = {};
