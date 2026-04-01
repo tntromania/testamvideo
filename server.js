@@ -431,48 +431,47 @@ const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, interv
     for (let poll = 1; poll <= maxPolls; poll++) {
         await new Promise(r => setTimeout(r, intervalMs));
         try {
-            // Endpoint corect: /uapi/v1/history/{uuid} (singular, nu plural)
-            const historyUrl = `https://api.geminigen.ai/uapi/v1/history/${uuid}`;
-            const res = await fetch(historyUrl, {
+            const res = await fetch(`https://api.geminigen.ai/uapi/v1/history/${uuid}`, {
                 headers: { 'x-api-key': apiKey }
             });
             const data = await res.json();
+            const result = data?.result || data;
 
-            // Dacă răspunsul conține 'detail' = eroare API
-            if (data?.detail && !data.status && !data.id) {
-                console.warn(`[GeminiGen] Poll ${poll} API error: ${JSON.stringify(data.detail)}`);
-                continue;
-            }
-
-            // API-ul poate returna obiectul direct sau învelit în { result: ... }
-            const result = (data?.result && typeof data.result === 'object') ? data.result : data;
-
-            const status = result.status ?? result.status_code;
-            const pct = result.status_percentage ?? 0;
+            const status = result.status;
+            const pct = result.status_percentage || 0;
 
             if (poll <= 3 || poll % 10 === 0) {
                 console.log(`[GeminiGen] Poll ${poll}/${maxPolls} uuid=${uuid} status=${status} pct=${pct}% | ${emailTag}`);
             }
 
             if (status === 2) {
-                // Structura răspunsului: generated_video[0].video_url (sau generated_image, etc.)
+                // Structura reală: generated_video[0].video_url
                 const videoUrl = result.generated_video?.[0]?.video_url
                     || result.generated_video?.[0]?.url;
                 if (videoUrl) return { success: true, url: videoUrl };
-
-                // Fallback: generate_result sau alte câmpuri
-                const mediaUrl = result.generate_result || result.media_url || result.url
-                    || result.video_url || result.output_url || result.file_url;
+                // Fallback la alte câmpuri
+                const mediaUrl = result.generate_result || result.media_url || result.url;
                 if (mediaUrl) return { success: true, url: mediaUrl };
-
-                console.error(`[GeminiGen] Status 2 dar fără URL! Keys: ${JSON.stringify(Object.keys(result))}`);
-                return { success: false, error: 'Video gata dar fără URL. Verifică logs.' };
+                console.error(`[GeminiGen] Status 2 dar fără URL! Keys: ${Object.keys(result).join(', ')}`);
+                return { success: false, error: 'Video gata dar fără URL.' };
             }
 
             if (status === 3) {
-                return { success: false, error: result.error_message || result.status_desc || result.message || 'Generarea a eșuat.' };
+                const errMsg = result.error_message || result.status_desc || result.error_code || '';
+                // GeminiGen returnează erori specifice pe care le mapăm
+                if (errMsg.toLowerCase().includes('audio')) {
+                    return { success: false, error: '🔊 Generarea audio a eșuat (promptul poate conține elemente blocate). Modifică promptul și reîncearcă.' };
+                }
+                if (errMsg.toLowerCase().includes('safety') || errMsg.toLowerCase().includes('filter') || errMsg.toLowerCase().includes('blocked')) {
+                    return { success: false, error: '🚫 Conținut blocat de filtrul de siguranță. Modifică promptul.' };
+                }
+                if (errMsg.toLowerCase().includes('person') || errMsg.toLowerCase().includes('face') || errMsg.toLowerCase().includes('human')) {
+                    return { success: false, error: '🚫 Promptul sau imaginea conține persoane/fețe care au fost blocate. Încearcă fără imagini cu persoane reale.' };
+                }
+                return { success: false, error: errMsg || 'Generarea a eșuat pe serverele AI. Reîncearcă.' };
             }
 
+            // status === 1 → still processing
         } catch (e) {
             console.warn(`[GeminiGen] Poll ${poll} eroare rețea: ${e.message}`);
         }
@@ -579,6 +578,7 @@ app.post('/api/media/video',
 
             // ─── Trimitem cererile paralel (count videoclipuri) ─────────
             const videoUrls = [];
+            let lastVideoError = null;
             const videoPromises = Array.from({ length: count }, async (_, idx) => {
                 if (clientAborted) return;
 
@@ -596,9 +596,7 @@ app.post('/api/media/video',
                         formData.append('aspect_ratio', grokAspect);
                     }
 
-                    // Atașăm imagini de referință
-                    // ⚠️ Grok acceptă fișiere DOAR în câmpul 'files', nu 'ref_images'
-                    // ⚠️ Veo acceptă fișiere în câmpul 'ref_images'
+                    // Grok: fișiere în 'files' | Veo: fișiere în 'ref_images'
                     if (isGrok) {
                         if (startImageFile) {
                             const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype);
@@ -618,7 +616,6 @@ app.post('/api/media/video',
                             }
                         }
                     } else {
-                        // Veo: ref_images acceptă fișiere
                         if (startImageFile) {
                             const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype);
                             const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
@@ -673,10 +670,29 @@ app.post('/api/media/video',
                     const result = await pollGeminiGenResult(uuid, GEMINIGEN_API_KEY, emailTag);
 
                     if (result.success) {
-                        videoUrls.push(result.url);
-                        console.log(`[Video] ✅ ${idx+1}/${count} gata: ${result.url} | ${emailTag}`);
+                        // Urcăm videoclipul pe R2 pentru stocare permanentă
+                        let finalUrl = result.url;
+                        try {
+                            sendStatus(`Se salvează videoclipul ${count > 1 ? `${idx+1}/${count}` : ''}...`);
+                            const videoFetch = await fetch(result.url, {
+                                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ViralioBOT/1.0)' }
+                            });
+                            if (videoFetch.ok) {
+                                const videoBuffer = Buffer.from(await videoFetch.arrayBuffer());
+                                const fileName = `videos/${req.userId}_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`;
+                                finalUrl = await uploadToR2(videoBuffer, fileName, 'video/mp4');
+                                console.log(`[Video] ✅ R2 upload: ${finalUrl} | ${emailTag}`);
+                            } else {
+                                console.warn(`[Video] ⚠️ Nu am putut descărca videoclipul pentru R2, folosesc URL original | ${emailTag}`);
+                            }
+                        } catch (uploadErr) {
+                            console.warn(`[Video] ⚠️ R2 upload eșuat, folosesc URL original: ${uploadErr.message} | ${emailTag}`);
+                        }
+                        videoUrls.push(finalUrl);
+                        console.log(`[Video] ✅ ${idx+1}/${count} gata: ${finalUrl} | ${emailTag}`);
                         if (!clientAborted) sendStatus(`${videoUrls.length} din ${count} videoclipuri gata...`);
                     } else {
+                        lastVideoError = result.error;
                         console.error(`[Video] ❌ ${idx+1}/${count}: ${result.error} | ${emailTag}`);
                         if (count === 1) throw new Error(result.error);
                     }
@@ -691,7 +707,8 @@ app.post('/api/media/video',
             if (clientAborted) { clearKeepAlive(); return; }
 
             if (videoUrls.length === 0) {
-                return sendError('Nu s-a putut genera niciun videoclip. Reîncearcă sau modifică promptul.');
+                // Colectăm erorile reale din videoclipurile eșuate pentru a le afișa
+                return sendError(lastVideoError || 'Nu s-a putut genera niciun videoclip. Reîncearcă sau modifică promptul.');
             }
 
             // Scădem creditele
@@ -755,14 +772,24 @@ app.get('/api/media/proxy-download', authenticate, async (req, res) => {
     const { url, filename } = req.query;
     if (!url) return res.status(400).json({ error: 'URL lipsă' });
     try {
-        const r = await fetch(url);
-        if (!r.ok) throw new Error('Fetch failed');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+        const r = await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ViralioBOT/1.0)' }
+        });
+        clearTimeout(timeoutId);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const buffer = await r.arrayBuffer();
         const contentType = r.headers.get('content-type') || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${filename || 'viralio_media'}"`);
+        res.setHeader('Content-Length', buffer.byteLength);
         res.send(Buffer.from(buffer));
-    } catch(e) { res.status(500).json({ error: 'Nu s-a putut descărca fișierul.' }); }
+    } catch(e) {
+        console.error(`[Proxy] Download eșuat pentru ${url}: ${e.message}`);
+        res.status(500).json({ error: 'Fișierul nu mai este disponibil sau a expirat.' });
+    }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
