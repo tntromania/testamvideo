@@ -659,6 +659,103 @@
 
 <div id="toast"></div>
 
+<!-- EXTEND MODAL -->
+<div id="extend-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(20px);z-index:200000;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s" onclick="closeExtendModal(event)">
+    <div onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#12121e 0%,#0e0e1a 100%);border:1px solid rgba(255,255,255,0.08);border-radius:24px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 40px 80px -20px rgba(0,0,0,0.7),0 0 0 1px rgba(99,102,241,0.15);position:relative">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.07)">
+            <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,rgba(99,102,241,0.3),rgba(139,92,246,0.3));border:1px solid rgba(99,102,241,0.3);display:flex;align-items:center;justify-content:center">
+                    <i class="fa-solid fa-forward" style="color:rgba(165,168,255,0.9);font-size:0.9rem"></i>
+                </div>
+                <div>
+                    <h3 style="font-size:1rem;font-weight:800;color:white;margin:0;line-height:1.2">Extinde Video</h3>
+                    <p style="font-size:0.68rem;color:rgba(255,255,255,0.3);margin:0;font-weight:600">Continuă videoclipul generat</p>
+                </div>
+            </div>
+            <button onclick="closeExtendModal()" style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+
+        <!-- Preview section -->
+        <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div style="display:flex;align-items:center;gap:16px">
+                <!-- Source video thumbnail -->
+                <div style="flex-shrink:0;position:relative">
+                    <div style="width:110px;height:70px;border-radius:12px;overflow:hidden;border:2px solid rgba(99,102,241,0.4);position:relative;background:#000">
+                        <video id="ext-preview-vid" muted preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>
+                        <div style="position:absolute;top:4px;left:4px;background:rgba(99,102,241,0.85);border-radius:6px;padding:2px 7px;font-size:0.55rem;font-weight:800;color:white;text-transform:uppercase;letter-spacing:0.05em">Sursă</div>
+                    </div>
+                </div>
+                <!-- Arrow + label -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0">
+                    <i class="fa-solid fa-arrow-right" style="color:rgba(99,102,241,0.7);font-size:1.1rem"></i>
+                    <span style="font-size:0.6rem;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.08em;text-align:center">Extinde<br>cu AI</span>
+                </div>
+                <!-- Result placeholder -->
+                <div style="flex:1;height:70px;border-radius:12px;border:2px dashed rgba(99,102,241,0.35);background:rgba(99,102,241,0.05);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                    <div style="width:28px;height:28px;border-radius:50%;border:2px solid rgba(99,102,241,0.4);display:flex;align-items:center;justify-content:center">
+                        <i class="fa-solid fa-plus" style="color:rgba(99,102,241,0.7);font-size:0.7rem"></i>
+                    </div>
+                    <span style="font-size:0.6rem;font-weight:700;color:rgba(99,102,241,0.6);text-transform:uppercase;letter-spacing:0.05em">Video extins</span>
+                    <span style="font-size:0.55rem;color:rgba(255,255,255,0.25)">Va fi generat</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model selector -->
+        <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <label style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);display:block;margin-bottom:10px">Model Extend</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="ext-model-btns">
+                <button onclick="selectExtendModel('grok')" id="ext-btn-grok" class="ext-model-btn" style="padding:10px 14px;border-radius:12px;border:1.5px solid rgba(99,102,241,0.5);background:rgba(99,102,241,0.12);cursor:pointer;text-align:left;transition:all 0.2s">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-size:1rem">⚡</span>
+                        <div>
+                            <div style="font-size:0.78rem;font-weight:800;color:rgba(165,168,255,0.95)">Grok 3</div>
+                            <div style="font-size:0.62rem;color:rgba(255,255,255,0.35);font-weight:600">720p · ~40 sec</div>
+                        </div>
+                    </div>
+                </button>
+                <button onclick="selectExtendModel('veo')" id="ext-btn-veo" class="ext-model-btn" style="padding:10px 14px;border-radius:12px;border:1.5px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);cursor:pointer;text-align:left;transition:all 0.2s">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-size:1rem">🌐</span>
+                        <div>
+                            <div style="font-size:0.78rem;font-weight:800;color:rgba(255,255,255,0.7)">Veo 2</div>
+                            <div style="font-size:0.62rem;color:rgba(255,255,255,0.35);font-weight:600">1080p · 1-2 min</div>
+                        </div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- Duration (only for Grok) -->
+        <div id="ext-duration-row" style="padding:14px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <label style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);display:block;margin-bottom:10px">Durată</label>
+            <div style="display:flex;gap:8px">
+                <button onclick="selectExtendDuration(6)" id="ext-dur-6" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:0.8rem;font-weight:700;cursor:pointer;transition:all 0.2s">6 secunde</button>
+                <button onclick="selectExtendDuration(10)" id="ext-dur-10" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid rgba(99,102,241,0.5);background:rgba(99,102,241,0.12);color:rgba(165,168,255,0.95);font-size:0.8rem;font-weight:700;cursor:pointer;transition:all 0.2s">10 secunde</button>
+            </div>
+        </div>
+
+        <!-- Prompt -->
+        <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <label style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);display:block;margin-bottom:10px">Prompt Extend <span style="normal-case;font-weight:500;color:rgba(255,255,255,0.2)">(opțional)</span></label>
+            <textarea id="ext-prompt" rows="3" placeholder="Descrie ce vrei să se întâmple în continuare... (opțional)" style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 14px;font-size:0.85rem;color:rgba(255,255,255,0.85);outline:none;resize:none;font-family:'Inter',sans-serif;transition:border-color 0.2s;box-sizing:border-box" onfocus="this.style.borderColor='rgba(99,102,241,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'"></textarea>
+        </div>
+
+        <!-- Footer / Generate button -->
+        <div style="padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:1.1rem;font-weight:900;color:#f5c842" id="ext-cost-display">2</span>
+                <i class="fa-solid fa-coins" style="color:#f5c842;font-size:0.85rem;opacity:0.8"></i>
+                <span style="font-size:0.68rem;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.05em">credite</span>
+            </div>
+            <button id="ext-gen-btn" onclick="submitExtend()" style="flex:1;max-width:260px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;padding:12px 20px;border-radius:14px;font-size:0.9rem;font-weight:800;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.3s;box-shadow:0 8px 24px rgba(99,102,241,0.3)" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 12px 28px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='none';this.style.boxShadow='0 8px 24px rgba(99,102,241,0.3)'">
+                <i class="fa-solid fa-forward"></i> Generează Extend
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- NAV -->
 <div class="sticky top-0 z-50 flex w-full justify-center px-4 pt-4 pb-2 max-w-screen-2xl mx-auto relative z-10">
     <nav class="nav-glass w-full px-4 md:px-6 py-3 flex justify-between items-center">
@@ -733,12 +830,10 @@
                         </optgroup>
                         <optgroup label="Video (Veo)" id="og-vid" style="display:none">
                             <option value="veo3.1-fast" data-type="video" data-cost="2">Veo 3.1 Fast · 1080p 🏆 — 2 Credite</option>
-                            <option value="veo-extend" data-type="video" data-cost="2">Veo Extend · Continuă video 🔗 — 2 Credite</option>
                         </optgroup>
                         <optgroup label="Video (Grok 3) — 720p" id="og-grok" style="display:none">
                             <option value="grok-720p-6s" data-type="video" data-cost="2">Grok 3 · 720p · 6s ⚡ — 2 Credite</option>
                             <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
-                            <option value="grok-extend" data-type="video" data-cost="2">Grok 3 Extend · Continuă video 🔗 — 2 Credite</option>
                         </optgroup>
                     </select>
                 </div>
@@ -839,13 +934,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- EXTEND VIDEO (ref_history) -->
-            <div id="extend-section" class="hidden panel-s pt-0 border-none">
-                <label class="field-label mb-2">UUID Video de Extins <span class="normal-case font-medium" style="color:rgba(255,255,255,0.2)">(din istoricul GeminiGen)</span></label>
-                <p class="text-[0.68rem] font-medium mb-3 leading-relaxed" style="color:rgba(255,255,255,0.25)">Introdu UUID-ul videoclipului generat anterior cu Veo sau Grok pe care vrei să-l continui.</p>
-                <input type="text" id="ref-history-input" placeholder="ex: e1bb12be-c917-11f0-98b0-..." class="w-full bg-transparent px-4 py-3 text-[0.84rem] font-medium outline-none rounded-xl" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85)" oninput="this.style.borderColor=this.value.trim()?'rgba(99,102,241,0.5)':'rgba(255,255,255,0.1)'">
             </div>
 
             <!-- REFS -->
@@ -1018,17 +1106,9 @@ function refreshBadges(){
     document.getElementById('total-cost').textContent = m.cost*n;
 }
 
-function isExtendModel(modelId) {
-    return modelId === 'veo-extend' || modelId === 'grok-extend';
-}
-
 function onModelChange(){
     refreshBadges();
     updateModelEtaChip();
-    const modelId = document.getElementById('model-sel')?.value || '';
-    const extendSec = document.getElementById('extend-section');
-    const framesSec = document.getElementById('start-frame-input')?.closest('.panel-s') || document.querySelector('#vid-options .panel-s:last-of-type');
-    if (extendSec) extendSec.classList.toggle('hidden', !isExtendModel(modelId));
 }
 
 function updateModelEtaChip(){
@@ -1076,11 +1156,6 @@ function switchMode(m){
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
     document.getElementById('refs-section').classList.toggle('hidden', isVid);
-    // Ascunde extend section la schimbare mod
-    const extSec = document.getElementById('extend-section');
-    if(extSec) extSec.classList.add('hidden');
-    const refInput = document.getElementById('ref-history-input');
-    if(refInput) refInput.value = '';
     refreshBadges();
     if(getToken()) loadHistory();
 }
@@ -1371,7 +1446,7 @@ function setJobStatus(jobId, text){
     if(st) st.textContent = text;
 }
 
-function setJobDone(jobId, urls, ratioVal, currentMode){ stopEtaTimer(jobId);
+function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(jobId);
     const body=document.getElementById(`job-body-${jobId}`); const card=document.getElementById(`job-${jobId}`);
     if(!body||!card) return;
     card.className='job-card done';
@@ -1417,12 +1492,15 @@ function setJobDone(jobId, urls, ratioVal, currentMode){ stopEtaTimer(jobId);
                     <button onclick="downloadMedia('${url}','viralio_img_${ts}.png')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button>
                 </div>`;
         } else {
+            const uuid = (uuids && uuids[idx]) || '';
+            const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
             el.innerHTML=`
                 <div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0">
                     <video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video>
                 </div>
-                <div class="p-2.5" style="border-top:1px solid rgba(255,255,255,0.05)">
-                    <button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button>
+                <div class="p-2.5 flex gap-2" style="border-top:1px solid rgba(255,255,255,0.05)">
+                    <button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="flex-1 text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button>
+                    <button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3)" onmouseover="this.style.background='rgba(99,102,241,0.22)'" onmouseout="this.style.background='rgba(99,102,241,0.12)'"><i class="fa-solid fa-forward text-[0.65rem]"></i>Extend</button>
                 </div>`;
         }
         return el;
@@ -1537,12 +1615,14 @@ async function readSSEJob(jobId, response){
 }
 
 function extractUrls(data){
-    if(!data) return [];
-    if(data.file_urls&&Array.isArray(data.file_urls)&&data.file_urls.length>0) return data.file_urls;
-    if(data.file_url) return [data.file_url];
-    if(data.video_url) return [data.video_url];
-    if(data.url) return [data.url];
-    const found=[]; const scan=(o)=>{ for(let k in o){ if(typeof o[k]==='string'&&(o[k].includes('.mp4')||o[k].includes('.png')||o[k].startsWith('http'))) found.push(o[k]); else if(typeof o[k]==='object'&&o[k]!==null) scan(o[k]); } }; scan(data); return found;
+    if(!data) return { urls: [], uuids: [] };
+    const uuids = data.file_uuids || [];
+    if(data.file_urls&&Array.isArray(data.file_urls)&&data.file_urls.length>0) return { urls: data.file_urls, uuids };
+    if(data.file_url) return { urls: [data.file_url], uuids };
+    if(data.video_url) return { urls: [data.video_url], uuids };
+    if(data.url) return { urls: [data.url], uuids };
+    const found=[]; const scan=(o)=>{ for(let k in o){ if(typeof o[k]==='string'&&(o[k].includes('.mp4')||o[k].includes('.png')||o[k].startsWith('http'))) found.push(o[k]); else if(typeof o[k]==='object'&&o[k]!==null) scan(o[k]); } }; scan(data);
+    return { urls: found, uuids };
 }
 
 // ===================== RUN JOB =====================
@@ -1558,8 +1638,8 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             const resp=await fetch('/api/media/image',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
-            const urls=extractUrls(data); if(!urls?.length) throw new Error('Nu s-au generat imagini.');
-            setJobDone(jobId,urls,ratio,currentMode); saveToSupabase(urls,promptText,currentMode);
+            const { urls } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-au generat imagini.');
+            setJobDone(jobId,urls,ratio,currentMode,[]); saveToSupabase(urls,promptText,currentMode);
         } else {
             const model_id=document.getElementById('model-sel').value;
             let statusMsg = 'Se trimite la AI...';
@@ -1571,14 +1651,11 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             if (startFrame) fd.append('start_image', startFrame, startFrame.name);
             if (endFrame)   fd.append('end_image',   endFrame,   endFrame.name);
             refs.forEach(f=>fd.append('ref_images',f,f.name));
-            // Extend: trimitem ref_history UUID
-            const refHistory = document.getElementById('ref-history-input')?.value?.trim() || '';
-            if (refHistory) fd.append('ref_history', refHistory);
             const resp=await fetch('/api/media/video',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
-            const urls=extractUrls(data); if(!urls?.length) throw new Error('Nu s-a generat video.');
-            setJobDone(jobId,urls,ratio,currentMode); saveToSupabase(urls,promptText,currentMode);
+            const { urls, uuids } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-a generat video.');
+            setJobDone(jobId,urls,ratio,currentMode,uuids); saveToSupabase(urls,promptText,currentMode);
         }
         setTimeout(loadHistory,2000);
     } catch(err){
@@ -1599,6 +1676,132 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
     }
 }
 
+// ===================== EXTEND MODAL =====================
+let _extendUUID = '';
+let _extendUrl  = '';
+let _extendModel = 'grok'; // 'grok' | 'veo'
+let _extendDuration = 10;
+
+function openExtendModal(uuid, url) {
+    _extendUUID = uuid || '';
+    _extendUrl  = url  || '';
+    _extendModel = 'grok';
+    _extendDuration = 10;
+
+    // Set preview video
+    const vid = document.getElementById('ext-preview-vid');
+    if(vid) { vid.src = url; vid.currentTime = 0; }
+
+    // Reset prompt
+    const pr = document.getElementById('ext-prompt'); if(pr) pr.value = '';
+
+    // Reset model selection
+    selectExtendModel('grok');
+    selectExtendDuration(10);
+
+    const modal = document.getElementById('extend-modal');
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+}
+
+function closeExtendModal(e) {
+    if(e && e.target !== document.getElementById('extend-modal') && e.type !== 'click') return;
+    const modal = document.getElementById('extend-modal');
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+    const vid = document.getElementById('ext-preview-vid');
+    if(vid) { vid.pause(); vid.src = ''; }
+}
+
+function selectExtendModel(model) {
+    _extendModel = model;
+    const grokBtn = document.getElementById('ext-btn-grok');
+    const veoBtn  = document.getElementById('ext-btn-veo');
+    const durRow  = document.getElementById('ext-duration-row');
+
+    if(model === 'grok') {
+        grokBtn.style.border = '1.5px solid rgba(99,102,241,0.5)';
+        grokBtn.style.background = 'rgba(99,102,241,0.12)';
+        grokBtn.querySelector('div div:first-child').style.color = 'rgba(165,168,255,0.95)';
+        veoBtn.style.border = '1.5px solid rgba(255,255,255,0.08)';
+        veoBtn.style.background = 'rgba(255,255,255,0.03)';
+        veoBtn.querySelector('div div:first-child').style.color = 'rgba(255,255,255,0.7)';
+        if(durRow) durRow.style.display = 'block';
+    } else {
+        veoBtn.style.border = '1.5px solid rgba(99,102,241,0.5)';
+        veoBtn.style.background = 'rgba(99,102,241,0.12)';
+        veoBtn.querySelector('div div:first-child').style.color = 'rgba(165,168,255,0.95)';
+        grokBtn.style.border = '1.5px solid rgba(255,255,255,0.08)';
+        grokBtn.style.background = 'rgba(255,255,255,0.03)';
+        grokBtn.querySelector('div div:first-child').style.color = 'rgba(255,255,255,0.7)';
+        if(durRow) durRow.style.display = 'none';
+    }
+}
+
+function selectExtendDuration(dur) {
+    _extendDuration = dur;
+    const b6  = document.getElementById('ext-dur-6');
+    const b10 = document.getElementById('ext-dur-10');
+    const active  = { border:'1.5px solid rgba(99,102,241,0.5)', background:'rgba(99,102,241,0.12)', color:'rgba(165,168,255,0.95)' };
+    const inactive = { border:'1.5px solid rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.03)', color:'rgba(255,255,255,0.5)' };
+    Object.assign(b6.style,  dur === 6  ? active : inactive);
+    Object.assign(b10.style, dur === 10 ? active : inactive);
+}
+
+async function submitExtend() {
+    const token = getToken(); if(!token){ closeExtendModal(); openLoginModal(); return; }
+    if(!_extendUUID){ toast('UUID lipsă — videoclipul nu are ID salvat.'); return; }
+
+    const prompt = document.getElementById('ext-prompt')?.value?.trim() || '';
+    const model_id = _extendModel === 'grok' ? 'grok-extend' : 'veo-extend';
+    const ratio = '9:16'; // extend uses source video ratio — backend ignores it for extend anyway
+
+    // Close modal and start job
+    closeExtendModal();
+
+    const jobId = ++jobCounter;
+    activeJobs.set(jobId, { aborted: false, reader: null });
+    const card = createJobCard(jobId, prompt || 'Extend video...', 'video', 1, ratio);
+    document.getElementById('jobs-area').prepend(card);
+    checkEmptyState();
+
+    const maxSec = _extendModel === 'grok' ? 50 : 130;
+    startEtaTimer(jobId, maxSec);
+
+    try {
+        const fd = new FormData();
+        fd.append('prompt', prompt);
+        fd.append('model_id', model_id);
+        fd.append('aspect_ratio', ratio);
+        fd.append('number_of_videos', '1');
+        fd.append('ref_history', _extendUUID);
+        fd.append('extend_duration', String(_extendDuration));
+
+        setJobStatus(jobId, 'Se trimite la AI pentru extend...');
+        const resp = await fetch('/api/media/video', { method:'POST', headers:{'Authorization':'Bearer '+token}, body:fd });
+        if(!resp.ok){ const j = await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
+        const data = await readSSEJob(jobId, resp);
+        const { urls, uuids } = extractUrls(data);
+        if(!urls?.length) throw new Error('Nu s-a generat video extend.');
+        setJobDone(jobId, urls, ratio, 'video', uuids);
+        saveToSupabase(urls, prompt || 'Extend video', 'video');
+        setTimeout(loadHistory, 2000);
+    } catch(err) {
+        let msg = err.message || '';
+        if(msg === 'Failed to fetch' || msg.toLowerCase().includes('network')) msg = 'Conexiunea a fost întreruptă. Reîncearcă.';
+        setJobError(jobId, msg);
+    } finally {
+        activeJobs.delete(jobId);
+        try {
+            const r = await fetch('/api/auth/me', { headers:{'Authorization':'Bearer '+token} });
+            if(r.ok){ const d = await r.json(); document.getElementById('nav-credits').innerText = d.user.credits; }
+        } catch(e){}
+    }
+}
+
+// Close extend modal on Escape
+document.addEventListener('keydown', e => { if(e.key==='Escape' && document.getElementById('extend-modal').style.display==='flex') closeExtendModal(); });
+
 // ===================== GENERATE =====================
 async function generate(){
     const token=getToken(); if(!token){ openLoginModal(); return; }
@@ -1610,15 +1813,6 @@ async function generate(){
     const refs=[...uploadedRefs];
     const startFrame = currentMode==='video' ? startFrameFile : null;
     const endFrame   = currentMode==='video' ? endFrameFile   : null;
-
-    // Validare extend
-    if(currentMode==='video'){
-        const selModel = document.getElementById('model-sel').value;
-        if(selModel === 'veo-extend' || selModel === 'grok-extend'){
-            const refUUID = document.getElementById('ref-history-input')?.value?.trim() || '';
-            if(!refUUID){ toast('Introdu UUID-ul videoclipului pe care vrei să-l extinzi!'); return; }
-        }
-    }
     const jobId=++jobCounter;
 
     activeJobs.set(jobId,{aborted:false,reader:null});
