@@ -733,10 +733,12 @@
                         </optgroup>
                         <optgroup label="Video (Veo)" id="og-vid" style="display:none">
                             <option value="veo3.1-fast" data-type="video" data-cost="2">Veo 3.1 Fast · 1080p 🏆 — 2 Credite</option>
+                            <option value="veo-extend" data-type="video" data-cost="2">Veo Extend · Continuă video 🔗 — 2 Credite</option>
                         </optgroup>
                         <optgroup label="Video (Grok 3) — 720p" id="og-grok" style="display:none">
                             <option value="grok-720p-6s" data-type="video" data-cost="2">Grok 3 · 720p · 6s ⚡ — 2 Credite</option>
                             <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
+                            <option value="grok-extend" data-type="video" data-cost="2">Grok 3 Extend · Continuă video 🔗 — 2 Credite</option>
                         </optgroup>
                     </select>
                 </div>
@@ -839,6 +841,13 @@
                 </div>
             </div>
 
+            <!-- EXTEND VIDEO (ref_history) -->
+            <div id="extend-section" class="hidden panel-s pt-0 border-none">
+                <label class="field-label mb-2">UUID Video de Extins <span class="normal-case font-medium" style="color:rgba(255,255,255,0.2)">(din istoricul GeminiGen)</span></label>
+                <p class="text-[0.68rem] font-medium mb-3 leading-relaxed" style="color:rgba(255,255,255,0.25)">Introdu UUID-ul videoclipului generat anterior cu Veo sau Grok pe care vrei să-l continui.</p>
+                <input type="text" id="ref-history-input" placeholder="ex: e1bb12be-c917-11f0-98b0-..." class="w-full bg-transparent px-4 py-3 text-[0.84rem] font-medium outline-none rounded-xl" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85)" oninput="this.style.borderColor=this.value.trim()?'rgba(99,102,241,0.5)':'rgba(255,255,255,0.1)'">
+            </div>
+
             <!-- REFS -->
             <div id="refs-section" class="panel-s pt-0 border-none mt-2">
                 <label class="field-label flex justify-between items-center mb-3">
@@ -938,8 +947,10 @@ const MODEL_META = {
     'gemini-flash': { type:'image', cost:1 },
     'gemini-pro':   { type:'image', cost:2 },
     'veo3.1-fast':  { type:'video', cost:2 },
+    'veo-extend':   { type:'video', cost:2 },
     'grok-720p-6s': { type:'video', cost:2 },
-    'grok-720p-10s':{ type:'video', cost:2 }
+    'grok-720p-10s':{ type:'video', cost:2 },
+    'grok-extend':  { type:'video', cost:2 }
 };
 let mode = 'image';
 let imgCount = 1;
@@ -1006,7 +1017,19 @@ function refreshBadges(){
     const n = mode==='image'?imgCount:vidCount;
     document.getElementById('total-cost').textContent = m.cost*n;
 }
-function onModelChange(){ refreshBadges(); updateModelEtaChip(); }
+
+function isExtendModel(modelId) {
+    return modelId === 'veo-extend' || modelId === 'grok-extend';
+}
+
+function onModelChange(){
+    refreshBadges();
+    updateModelEtaChip();
+    const modelId = document.getElementById('model-sel')?.value || '';
+    const extendSec = document.getElementById('extend-section');
+    const framesSec = document.getElementById('start-frame-input')?.closest('.panel-s') || document.querySelector('#vid-options .panel-s:last-of-type');
+    if (extendSec) extendSec.classList.toggle('hidden', !isExtendModel(modelId));
+}
 
 function updateModelEtaChip(){
     const chip = document.getElementById('model-eta-chip');
@@ -1018,10 +1041,10 @@ function updateModelEtaChip(){
         chip.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;
             background:rgba(99,211,140,0.08);border:1px solid rgba(99,211,140,0.2);width:100%;box-sizing:border-box">
-            <span style="font-size:0.95rem">⚡</span>
+            <span style="font-size:0.95rem">${modelId==='grok-extend'?'🔗':'⚡'}</span>
             <div>
                 <span style="font-size:0.68rem;font-weight:700;color:rgba(99,211,140,0.9);letter-spacing:0.02em">~40 secunde</span>
-                <span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">procesare rapidă</span>
+                <span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${modelId==='grok-extend'?'Grok Extend · continuă video':'procesare rapidă'}</span>
             </div>
         </div>`;
     } else if(modelId.startsWith('veo')){
@@ -1029,10 +1052,10 @@ function updateModelEtaChip(){
         chip.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;
             background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);width:100%;box-sizing:border-box">
-            <span style="font-size:0.95rem">⏳</span>
+            <span style="font-size:0.95rem">${modelId==='veo-extend'?'🔗':'⏳'}</span>
             <div>
                 <span style="font-size:0.68rem;font-weight:700;color:rgba(167,139,250,0.9);letter-spacing:0.02em">1–2 minute</span>
-                <span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">servere aglomerate</span>
+                <span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${modelId==='veo-extend'?'Veo Extend · continuă video':'servere aglomerate'}</span>
             </div>
         </div>`;
     } else {
@@ -1053,6 +1076,11 @@ function switchMode(m){
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
     document.getElementById('refs-section').classList.toggle('hidden', isVid);
+    // Ascunde extend section la schimbare mod
+    const extSec = document.getElementById('extend-section');
+    if(extSec) extSec.classList.add('hidden');
+    const refInput = document.getElementById('ref-history-input');
+    if(refInput) refInput.value = '';
     refreshBadges();
     if(getToken()) loadHistory();
 }
@@ -1214,12 +1242,24 @@ function buildShimmerLoading(currentMode, count, ratio, modelId) {
     let etaBadge = '';
     if (currentMode === 'video' && modelId) {
         let etaIcon, etaLabel, etaNote, etaColor, etaGlow;
-        if (modelId.startsWith('grok-')) {
+        if (modelId === 'grok-extend') {
+            etaIcon = '🔗';
+            etaLabel = '~40 sec';
+            etaNote = 'Grok Extend · continuă video';
+            etaColor = 'rgba(99,211,140,0.15)';
+            etaGlow  = 'rgba(99,211,140,0.35)';
+        } else if (modelId.startsWith('grok-')) {
             etaIcon = '⚡';
             etaLabel = '~40 sec';
             etaNote = 'Grok · procesare rapidă';
             etaColor = 'rgba(99,211,140,0.15)';
             etaGlow  = 'rgba(99,211,140,0.35)';
+        } else if (modelId === 'veo-extend') {
+            etaIcon = '🔗';
+            etaLabel = '1–2 min';
+            etaNote = 'Veo Extend · continuă video';
+            etaColor = 'rgba(139,92,246,0.15)';
+            etaGlow  = 'rgba(139,92,246,0.35)';
         } else {
             etaIcon = '🌐';
             etaLabel = '1–2 min';
@@ -1525,11 +1565,15 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             let statusMsg = 'Se trimite la AI...';
             if (startFrame && endFrame) statusMsg = 'Se trimite cu start + end frame...';
             else if (startFrame) statusMsg = 'Se trimite cu start frame...';
+            else if (model_id === 'veo-extend' || model_id === 'grok-extend') statusMsg = 'Se trimite pentru extend video...';
             setJobStatus(jobId, statusMsg);
             fd.append('prompt',promptText); fd.append('aspect_ratio',ratio); fd.append('number_of_videos',vidCount); fd.append('model_id',model_id);
             if (startFrame) fd.append('start_image', startFrame, startFrame.name);
             if (endFrame)   fd.append('end_image',   endFrame,   endFrame.name);
             refs.forEach(f=>fd.append('ref_images',f,f.name));
+            // Extend: trimitem ref_history UUID
+            const refHistory = document.getElementById('ref-history-input')?.value?.trim() || '';
+            if (refHistory) fd.append('ref_history', refHistory);
             const resp=await fetch('/api/media/video',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
@@ -1566,6 +1610,15 @@ async function generate(){
     const refs=[...uploadedRefs];
     const startFrame = currentMode==='video' ? startFrameFile : null;
     const endFrame   = currentMode==='video' ? endFrameFile   : null;
+
+    // Validare extend
+    if(currentMode==='video'){
+        const selModel = document.getElementById('model-sel').value;
+        if(selModel === 'veo-extend' || selModel === 'grok-extend'){
+            const refUUID = document.getElementById('ref-history-input')?.value?.trim() || '';
+            if(!refUUID){ toast('Introdu UUID-ul videoclipului pe care vrei să-l extinzi!'); return; }
+        }
+    }
     const jobId=++jobCounter;
 
     activeJobs.set(jobId,{aborted:false,reader:null});
@@ -1583,7 +1636,7 @@ async function generate(){
     // Start ETA timer if video mode
     if(currentMode==='video'){
         const modelId = document.getElementById('model-sel')?.value || '';
-        const maxSec = modelId.startsWith('grok-') ? 50 : 130;
+        const maxSec = (modelId.startsWith('grok-')) ? 50 : 130;
         startEtaTimer(jobId, maxSec);
     }
 }
