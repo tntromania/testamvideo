@@ -1155,7 +1155,7 @@ function switchMode(m){
     updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
-    document.getElementById('refs-section').classList.toggle('hidden', isVid);
+    // refs visible in both modes
     refreshBadges();
     if(getToken()) loadHistory();
 }
@@ -1494,8 +1494,11 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
             const uuid = (uuids && uuids[idx]) || '';
             const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
             el.innerHTML=`
-                <div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0">
+                <div class="${aspectClass(ratioVal)} w-full relative overflow-hidden group" style="background:#000;border-radius:14px 14px 0 0">
                     <video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video>
+                    <div class="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="z-index:10">
+                        <button ${extendAttr} onclick="event.stopPropagation();openExtendModal(this.dataset.uuid, this.dataset.url)" class="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl backdrop-blur-md transition-all hover:scale-105" style="background:rgba(99,102,241,0.85);color:white;border:1px solid rgba(165,168,255,0.3);box-shadow:0 4px 16px rgba(99,102,241,0.4)"><i class="fa-solid fa-forward text-[0.6rem]"></i>Extend</button>
+                    </div>
                 </div>
                 <div class="p-2.5 flex gap-2" style="border-top:1px solid rgba(255,255,255,0.05)">
                     <button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="flex-1 text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button>
@@ -1893,13 +1896,16 @@ async function loadHistory(append=false){
                         <img src="${url}" loading="lazy" class="w-full h-full object-cover" onerror="this.parentElement.style.opacity='0.3';this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22/>'">
                     </div>`;
                 return `
-                    <div class="aspect-video relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.03]" style="border:1px solid rgba(255,255,255,0.06)" onclick="openLightbox(window.currentHistoryMedia,${idx},'video')">
+                    <div class="aspect-video relative rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.03] group" style="border:1px solid rgba(255,255,255,0.06)" onclick="openLightbox(window.currentHistoryMedia,${idx},'video')">
                         <video data-src="${url}" class="w-full h-full object-cover hist-video" preload="none" muted playsinline
                             onerror="this.parentElement.style.opacity='0.3'"></video>
                         <div class="absolute inset-0 flex items-center justify-center" style="background:rgba(0,0,0,0.35)">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);backdrop-filter:blur(4px)">
                                 <i class="fa-solid fa-play text-white text-xs ml-0.5"></i>
                             </div>
+                        </div>
+                        <div class="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="z-index:10">
+                            <button data-url="${url}" onclick="event.stopPropagation();openExtendModal('',this.dataset.url)" class="flex items-center gap-1 text-[0.6rem] font-bold px-2 py-1 rounded-lg backdrop-blur-md" style="background:rgba(99,102,241,0.85);color:white;border:1px solid rgba(165,168,255,0.3)"><i class="fa-solid fa-forward" style="font-size:0.5rem"></i>Extend</button>
                         </div>
                     </div>`;
             }).join('');
@@ -2169,20 +2175,33 @@ async function loadRefsPickerHistory() {
     }
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-spinner fa-spin mb-2 text-lg block" style="color:rgba(99,102,241,0.4)"></i>Se încarcă...</div>`;
     try {
-        const res = await fetch('/api/media/history?type=image&page=1&limit=40', { headers:{'Authorization':'Bearer '+token} });
+        const currentModeLocal = mode; // 'image' or 'video'
+        const res = await fetch(`/api/media/history?type=${currentModeLocal}&page=1&limit=40`, { headers:{'Authorization':'Bearer '+token} });
         const data = await res.json();
-        const allUrls = [];
-        (data.history||[]).forEach(item => { const u = item.supabaseUrl||item.originalUrl; if(u) allUrls.push(u); });
+        const allItems = []; // { url, type }
+        (data.history||[]).forEach(item => {
+            const u = item.supabaseUrl||item.originalUrl;
+            if(u) allItems.push({ url: u, type: item.type || currentModeLocal });
+        });
 
-        if(!allUrls.length) {
-            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-image mb-2 text-xl block" style="color:rgba(255,255,255,0.1)"></i>Nicio imagine în istoric</div>`;
+        if(!allItems.length) {
+            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 0;color:rgba(255,255,255,0.2);font-size:0.8rem"><i class="fa-solid fa-photo-film mb-2 text-xl block" style="color:rgba(255,255,255,0.1)"></i>Nicio înregistrare în istoric</div>`;
             return;
         }
 
-        grid.innerHTML = allUrls.map((url, i) => {
+        grid.innerHTML = allItems.map(({ url, type }) => {
             const isSelected = _refsPickerSelected.some(s => s.url === url);
-            return `<div class="refs-picker-item" data-url="${url}" onclick="toggleRefsPickerItem(this,'${url}')" style="aspect-ratio:1;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;border:2px solid ${isSelected?'rgba(99,102,241,0.7)':'transparent'};transition:all 0.18s;background:#0a0a16">
-                <img src="${url}" loading="lazy" style="width:100%;height:100%;object-fit:cover;transition:transform 0.2s" onerror="this.parentElement.style.display='none'">
+            const isVideo = type === 'video';
+            const mediaEl = isVideo
+                ? `<video src="${url}" preload="none" muted playsinline style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.display='none'"></video>
+                   <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3)">
+                     <div style="width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,0.2);border:1.5px solid rgba(255,255,255,0.4);display:flex;align-items:center;justify-content:center">
+                       <i class="fa-solid fa-play" style="font-size:0.5rem;color:white;margin-left:1px"></i>
+                     </div>
+                   </div>`
+                : `<img src="${url}" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.display='none'">`;
+            return `<div class="refs-picker-item" data-url="${escHtml(url)}" onclick="toggleRefsPickerItem(this,'${escHtml(url)}')" style="aspect-ratio:1;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;border:2px solid ${isSelected?'rgba(99,102,241,0.7)':'transparent'};transition:all 0.18s;background:#0a0a16">
+                ${mediaEl}
                 <div class="refs-picker-check" style="position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;background:${isSelected?'rgba(99,102,241,0.95)':'rgba(0,0,0,0.4)'};border:2px solid ${isSelected?'rgba(165,168,255,0.8)':'rgba(255,255,255,0.3)'};display:flex;align-items:center;justify-content:center;transition:all 0.18s;backdrop-filter:blur(4px)">
                     <i class="fa-solid fa-check" style="font-size:0.55rem;color:white;opacity:${isSelected?1:0};transition:opacity 0.15s"></i>
                 </div>
@@ -2194,6 +2213,7 @@ async function loadRefsPickerHistory() {
 }
 
 function toggleRefsPickerItem(el, url) {
+    const maxRefs = getMaxRefs();
     const already = _refsPickerSelected.findIndex(s => s.url === url);
     if(already >= 0) {
         _refsPickerSelected.splice(already, 1);
@@ -2201,7 +2221,7 @@ function toggleRefsPickerItem(el, url) {
         const check = el.querySelector('.refs-picker-check');
         if(check) { check.style.background='rgba(0,0,0,0.4)'; check.style.borderColor='rgba(255,255,255,0.3)'; check.querySelector('i').style.opacity='0'; }
     } else {
-        if(_refsPickerSelected.length >= 4) { toast('Maxim 4 referințe!'); return; }
+        if(_refsPickerSelected.length >= maxRefs) { toast(`Maxim ${maxRefs} referințe pentru modelul selectat!`); return; }
         _refsPickerSelected.push({ type:'history', url });
         el.style.border = '2px solid rgba(99,102,241,0.7)';
         const check = el.querySelector('.refs-picker-check');
@@ -2211,8 +2231,9 @@ function toggleRefsPickerItem(el, url) {
 }
 
 function handleRefsPickerUpload(e) {
+    const maxRefs = getMaxRefs();
     Array.from(e.target.files).forEach(f => {
-        if(_refsPickerSelected.length >= 4) return;
+        if(_refsPickerSelected.length >= maxRefs) return;
         _refsPickerSelected.push({ type:'upload', file:f, url: URL.createObjectURL(f) });
     });
     renderRefsPickerSelected();
@@ -2223,8 +2244,9 @@ function renderRefsPickerSelected() {
     const wrap = document.getElementById('refs-picker-selected');
     const grid = document.getElementById('refs-picker-selected-grid');
     const label = document.getElementById('refs-picker-count-label');
+    const maxRefs = getMaxRefs();
     const n = _refsPickerSelected.length;
-    label.textContent = `${n} selectate (max 4)`;
+    label.textContent = `${n} selectate (max ${maxRefs})`;
     if(!n) { wrap.style.display='none'; return; }
     wrap.style.display='block';
     grid.innerHTML = _refsPickerSelected.map((s,i) => `
@@ -2251,19 +2273,29 @@ function removeRefsPickerItem(i) {
     });
 }
 
+function getMaxRefs() {
+    const model = document.getElementById('model-sel')?.value || '';
+    return model === 'gemini-pro' ? 14 : 3;
+}
+
 function confirmRefsPicker() {
     uploadedRefs = [];
-    const urlPromises = _refsPickerSelected.map(async s => {
+    const filePromises = _refsPickerSelected.map(async s => {
         if(s.type === 'upload') return s.file;
-        // Convert history URL to File
+        // For history URLs: try proxy first, fallback to passing URL as-is via a blob fetch through our own server
         try {
-            const res = await fetch(s.url);
+            const proxyUrl = `/api/media/proxy-download?url=${encodeURIComponent(s.url)}&filename=ref.jpg`;
+            const res = await fetch(proxyUrl);
+            if(!res.ok) throw new Error('proxy fail');
             const blob = await res.blob();
             const ext = blob.type.includes('png') ? 'png' : 'jpg';
-            return new File([blob], `ref_${Date.now()}.${ext}`, { type: blob.type });
-        } catch(e) { return null; }
+            return new File([blob], `ref_hist_${Date.now()}.${ext}`, { type: blob.type });
+        } catch(e) {
+            // If proxy fails too, store URL as a special marker file won't work — skip
+            return null;
+        }
     });
-    Promise.all(urlPromises).then(files => {
+    Promise.all(filePromises).then(files => {
         uploadedRefs = files.filter(Boolean);
         renderRefGallery();
         closeRefsPicker();
