@@ -1446,7 +1446,7 @@ function setJobStatus(jobId, text){
     if(st) st.textContent = text;
 }
 
-function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(jobId);
+function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(jobId); clearActiveTask();
     const body=document.getElementById(`job-body-${jobId}`); const card=document.getElementById(`job-${jobId}`);
     if(!body||!card) return;
     card.className='job-card done';
@@ -1542,7 +1542,7 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
     body.appendChild(wrapper);
 }
 
-function setJobError(jobId, msg){ stopEtaTimer(jobId);
+function setJobError(jobId, msg){ stopEtaTimer(jobId); clearActiveTask();
     const body=document.getElementById(`job-body-${jobId}`); const card=document.getElementById(`job-${jobId}`);
     if(!body) return;
     card.className='job-card error';
@@ -1639,7 +1639,7 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
             const { urls } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-au generat imagini.');
-            setJobDone(jobId,urls,ratio,currentMode,[]); saveToSupabase(urls,promptText,currentMode);
+            setJobDone(jobId,urls,ratio,currentMode,[]); saveToSupabase(urls,promptText,currentMode,[]);
         } else {
             const model_id=document.getElementById('model-sel').value;
             let statusMsg = 'Se trimite la AI...';
@@ -1655,7 +1655,7 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
             const { urls, uuids } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-a generat video.');
-            setJobDone(jobId,urls,ratio,currentMode,uuids); saveToSupabase(urls,promptText,currentMode);
+            setJobDone(jobId,urls,ratio,currentMode,uuids); saveToSupabase(urls,promptText,currentMode,uuids);
         }
         setTimeout(loadHistory,2000);
     } catch(err){
@@ -1770,6 +1770,7 @@ async function submitExtend() {
 
     const maxSec = _extendModel === 'grok' ? 50 : 130;
     startEtaTimer(jobId, maxSec);
+    markTaskActive(jobId, { type: 'extend', prompt, uuid: _extendUUID, model: model_id });
 
     try {
         const fd = new FormData();
@@ -1787,7 +1788,7 @@ async function submitExtend() {
         const { urls, uuids } = extractUrls(data);
         if(!urls?.length) throw new Error('Nu s-a generat video extend.');
         setJobDone(jobId, urls, ratio, 'video', uuids);
-        saveToSupabase(urls, prompt || 'Extend video', 'video');
+        saveToSupabase(urls, prompt || 'Extend video', 'video', uuids);
         setTimeout(loadHistory, 2000);
     } catch(err) {
         let msg = err.message || '';
@@ -1835,13 +1836,16 @@ async function generate(){
         const modelId = document.getElementById('model-sel')?.value || '';
         const maxSec = (modelId.startsWith('grok-')) ? 50 : 130;
         startEtaTimer(jobId, maxSec);
+        markTaskActive(jobId, { type: 'video', prompt: promptText, model: modelId });
+    } else {
+        markTaskActive(jobId, { type: 'image', prompt: promptText });
     }
 }
 
 // ===================== HISTORY =====================
-async function saveToSupabase(urls,promptText,jobMode){
+async function saveToSupabase(urls,promptText,jobMode,uuids){
     const token=getToken(); if(!token) return;
-    try { await fetch('/api/media/save-history',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({urls,type:jobMode||mode,prompt:promptText})}); } catch(e){}
+    try { await fetch('/api/media/save-history',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({urls,type:jobMode||mode,prompt:promptText,uuids:uuids||[]})}); } catch(e){}
 }
 
 let historyPage = 1;
@@ -1875,8 +1879,10 @@ async function loadHistory(append=false){
             const last=grouped[grouped.length-1]; const ps=item.prompt||'Fără prompt';
             const url=item.supabaseUrl||item.originalUrl;
             if(!url) return; // skip entries without URL
-            if(last&&last.prompt===ps&&last.type===item.type) last.urls.push(url);
-            else grouped.push({prompt:ps,type:item.type,urls:[url]});
+            if(last&&last.prompt===ps&&last.type===item.type) {
+                last.urls.push(url);
+                last.uuids.push(item.uuid||'');
+            } else grouped.push({prompt:ps,type:item.type,urls:[url],uuids:[item.uuid||'']});
         });
 
         if(!append) window.currentHistoryMedia=[];
@@ -1884,10 +1890,10 @@ async function loadHistory(append=false){
 
         let counter=window.currentHistoryMedia.length;
 
-        grouped.forEach(g=>g.urls.forEach(u=>window.currentHistoryMedia.push({url:u,type:g.type})));
+        grouped.forEach(g=>g.urls.forEach((u,i)=>window.currentHistoryMedia.push({url:u,type:g.type,uuid:g.uuids[i]||''})));
 
         grouped.forEach((group,i)=>{
-            const mediaHtml=group.urls.map((url)=>{
+            const mediaHtml=group.urls.map((url,urlIdx)=>{
                 const idx=counter++;
                 if(group.type==='image') return `
                     <div class="aspect-square rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-[1.03] hover:shadow-lg relative bg-white/5" style="border:1px solid rgba(255,255,255,0.06)" onclick="openLightbox(window.currentHistoryMedia,${idx},'image')">
@@ -1904,7 +1910,7 @@ async function loadHistory(append=false){
                             </div>
                         </div>
                         <div class="absolute bottom-1.5 right-1.5" style="z-index:3">
-                            <button data-url="${url}" onclick="event.stopPropagation();openExtendModal('',this.dataset.url)" class="flex items-center gap-1 text-[0.6rem] font-bold px-2 py-1 rounded-lg" style="background:rgba(99,102,241,0.88);color:white;border:1px solid rgba(165,168,255,0.3);backdrop-filter:blur(4px)"><i class="fa-solid fa-forward" style="font-size:0.5rem"></i><span class="hidden sm:inline">Extindere</span><span class="sm:hidden">+</span></button>
+                            <button data-url="${url}" data-uuid="${group.uuids[urlIdx]||''}" onclick="event.stopPropagation();openExtendModal(this.dataset.uuid,this.dataset.url)" class="flex items-center gap-1 text-[0.6rem] font-bold px-2 py-1 rounded-lg" style="background:rgba(99,102,241,0.88);color:white;border:1px solid rgba(165,168,255,0.3);backdrop-filter:blur(4px)"><i class="fa-solid fa-forward" style="font-size:0.5rem"></i><span class="hidden sm:inline">Extindere</span><span class="sm:hidden">+</span></button>
                         </div>
                     </div>`;
             }).join('');
@@ -1963,6 +1969,77 @@ function observeHistoryVideos(){
     document.querySelectorAll('.hist-video[data-src]').forEach(v => {
         if(!v.src) videoObserver.observe(v);
     });
+}
+
+// ===================== TASK PERSISTENCE (anti-refresh loss) =====================
+function markTaskActive(jobId, meta) {
+    try {
+        localStorage.setItem('viralio_active_task', JSON.stringify({
+            jobId, startedAt: Date.now(), ...meta
+        }));
+    } catch(e) {}
+}
+function clearActiveTask() {
+    try { localStorage.removeItem('viralio_active_task'); } catch(e) {}
+}
+
+(function checkPendingTask() {
+    try {
+        const raw = localStorage.getItem('viralio_active_task');
+        if (!raw) return;
+        const task = JSON.parse(raw);
+        const age = Date.now() - task.startedAt;
+        // Dacă task-ul are sub 12 minute îl considerăm activ
+        if (age > 720000) { localStorage.removeItem('viralio_active_task'); return; }
+        // Afișăm banner după ce DOM-ul e gata
+        window.addEventListener('DOMContentLoaded', () => showRecoveryBanner(task));
+    } catch(e) { try { localStorage.removeItem('viralio_active_task'); } catch(e2){} }
+})();
+
+function showRecoveryBanner(task) {
+    if (document.getElementById('recovery-banner')) return;
+    const type = task.type === 'extend' ? 'extindere video' : task.type === 'video' ? 'video' : 'imagini';
+    const banner = document.createElement('div');
+    banner.id = 'recovery-banner';
+    banner.style.cssText = [
+        'position:fixed','top:76px','left:50%','transform:translateX(-50%)',
+        'z-index:999999','display:flex','align-items:center','gap:14px',
+        'padding:14px 20px','border-radius:16px','font-size:0.85rem','font-weight:600',
+        'background:rgba(99,102,241,0.18)','border:1px solid rgba(99,102,241,0.45)',
+        'backdrop-filter:blur(20px)','box-shadow:0 16px 40px rgba(0,0,0,0.5)',
+        'color:white','max-width:520px','width:90%'
+    ].join(';');
+    banner.innerHTML = `
+        <div style="width:34px;height:34px;border-radius:10px;background:rgba(99,102,241,0.3);border:1px solid rgba(165,168,255,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-solid fa-spinner fa-spin" style="color:#a5a8ff;font-size:0.85rem"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+            <div style="font-size:0.82rem;font-weight:700;color:white">Generare ${type} în progres</div>
+            <div style="font-size:0.7rem;font-weight:500;color:rgba(255,255,255,0.5);margin-top:2px">Procesarea continuă pe server. Verifică istoricul când e gata.</div>
+        </div>
+        <button id="recovery-refresh-btn" style="padding:7px 14px;border-radius:10px;background:rgba(99,102,241,0.35);border:1px solid rgba(165,168,255,0.3);color:#a5a8ff;font-size:0.75rem;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0">
+            <i class="fa-solid fa-rotate mr-1"></i>Verifică
+        </button>
+        <button onclick="document.getElementById('recovery-banner').remove();clearActiveTask();" style="width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.7rem">
+            <i class="fa-solid fa-xmark"></i>
+        </button>`;
+    document.body.appendChild(banner);
+
+    // Butonul Verifică reîncarcă istoricul și ascunde bannerul
+    document.getElementById('recovery-refresh-btn').onclick = async () => {
+        await loadHistory();
+        // Dacă istoricul s-a reîncărcat și bannerul mai e acolo, îl lăsăm până userul îl închide
+        document.getElementById('recovery-banner')?.remove();
+        clearActiveTask();
+    };
+
+    // Auto-refresh la fiecare 20s
+    const interval = setInterval(async () => {
+        if (!localStorage.getItem('viralio_active_task')) { clearInterval(interval); return; }
+        const b = document.getElementById('recovery-banner');
+        if (!b) { clearInterval(interval); return; }
+        await loadHistory();
+    }, 20000);
 }
 
 // ===================== THEME TOGGLE =====================
