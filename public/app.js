@@ -56,7 +56,7 @@ window.onload = async () => {
         document.getElementById('og-img').style.display = 'none';
         document.getElementById('og-vid').style.display = '';
         document.getElementById('og-grok').style.display = '';
-        document.getElementById('model-sel').value = 'veo3.1-fast';
+        ddocument.getElementById('model-sel').value = 'grok-720p-6s';
         updateModelEtaChip();
         document.getElementById('img-options').classList.add('hidden');
         document.getElementById('vid-options').classList.remove('hidden');
@@ -116,7 +116,7 @@ function switchMode(m){
     document.getElementById('og-img').style.display = isVid?'none':'';
     document.getElementById('og-vid').style.display = isVid?'':'none';
     document.getElementById('og-grok').style.display = isVid?'':'none';
-    document.getElementById('model-sel').value = isVid?'veo3.1-fast':'gemini-flash';
+    document.getElementById('model-sel').value = isVid?'grok-720p-6s':'gemini-flash';
     updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
@@ -260,26 +260,10 @@ function buildShimmerLoading(currentMode, count, ratio, modelId) {
     const placeholders = Array.from({length: count}, (_, i) =>
         `<div class="rounded-xl shimmer-box shrink-0" style="aspect-ratio:${aspectCSS};width:${cardW};animation-delay:${i*0.15}s"></div>`
     ).join('');
-    const statusId = 'job-status-JOBID';
-    const statusText = currentMode === 'video' ? 'Se generează videoclipul...' : 'Se generează imaginile...';
 
-    // ★ FIX BUG 2: ETA badge — was built but NEVER injected into return HTML
-    let etaBadge = '';
-    if (currentMode === 'video' && modelId) {
-        let etaIcon, etaNote, etaColor, etaGlow;
-        if (modelId === 'grok-extend') {
-            etaIcon='🔗'; etaNote='Grok Extend · continuă video'; etaColor='rgba(99,211,140,0.15)'; etaGlow='rgba(99,211,140,0.35)';
-        } else if (modelId.startsWith('grok-')) {
-            etaIcon='⚡'; etaNote='Grok · procesare rapidă'; etaColor='rgba(99,211,140,0.15)'; etaGlow='rgba(99,211,140,0.35)';
-        } else if (modelId === 'veo-extend') {
-            etaIcon='🔗'; etaNote='Veo Extend · continuă video'; etaColor='rgba(139,92,246,0.15)'; etaGlow='rgba(139,92,246,0.35)';
-        } else {
-            etaIcon='🌐'; etaNote='Veo 3.1 · servere aglomerate'; etaColor='rgba(139,92,246,0.15)'; etaGlow='rgba(139,92,246,0.35)';
-        }
-        etaBadge = `<div class="eta-badge" style="display:flex;align-items:center;gap:10px;background:${etaColor};border:1px solid ${etaGlow};border-radius:12px;padding:8px 14px;margin-top:2px;backdrop-filter:blur(8px)"><span style="font-size:1rem;line-height:1">${etaIcon}</span><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-size:0.7rem;font-weight:700;color:rgba(255,255,255,0.75);letter-spacing:0.03em">${etaNote}</span><span id="eta-timer-JOBID" style="font-size:0.7rem;font-weight:700;font-variant-numeric:tabular-nums;color:rgba(255,255,255,0.4);font-family:monospace">0s</span></div><div style="margin-top:5px;height:2px;border-radius:99px;background:rgba(255,255,255,0.07);overflow:hidden"><div id="eta-bar-JOBID" style="height:100%;border-radius:99px;background:${etaGlow};width:0%;transition:width 1s linear"></div></div></div></div>`;
-    }
-
-    return `<div class="flex flex-col gap-3">${header}<div class="flex gap-2 justify-center flex-wrap">${placeholders}</div>${etaBadge}<p id="${statusId}" class="text-center text-xs font-medium mt-1" style="color:rgba(255,255,255,0.3)">${statusText}</p></div>`;
+    // Returnăm doar scheletul curat (header + placeholders).
+    // Am lăsat elementul status ascuns (display:none) doar ca sistemul tău să nu dea eroare în consolă când încearcă să-i dea update în background.
+    return `<div class="flex flex-col gap-3">${header}<div class="flex gap-2 justify-center flex-wrap">${placeholders}</div><p id="job-status-JOBID" style="display:none;"></p></div>`;
 }
 
 // ===================== ETA TIMER =====================
