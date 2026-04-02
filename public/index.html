@@ -1074,12 +1074,30 @@ function updateUI(user) {
     document.getElementById('nav-name').innerText = user.name.split(' ')[0];
     document.getElementById('nav-avatar').src = user.picture;
     document.getElementById('nav-credits').innerText = user.credits;
-    loadHistory();
+    loadHistory(); // mode e deja restaurat din localStorage în window.onload
 }
 
 function logout() { removeToken(); location.reload(); }
 
 window.onload = async () => {
+    // ── Restaurăm mode-ul (image/video) din localStorage înainte de orice altceva ──
+    const savedMode = localStorage.getItem('viralio_mode');
+    if (savedMode === 'video' && mode !== 'video') {
+        // Schimbăm fără să triggereze loadHistory (îl facem noi mai jos)
+        mode = 'video';
+        document.getElementById('tab-image').classList.remove('active');
+        document.getElementById('tab-video').classList.add('active');
+        document.getElementById('og-img').style.display = 'none';
+        document.getElementById('og-vid').style.display = '';
+        document.getElementById('og-grok').style.display = '';
+        document.getElementById('model-sel').value = 'veo3.1-fast';
+        updateModelEtaChip();
+        document.getElementById('img-options').classList.add('hidden');
+        document.getElementById('vid-options').classList.remove('hidden');
+        document.getElementById('refs-section').classList.add('hidden');
+        refreshBadges();
+    }
+
     const t = getToken();
     if(t) {
         try {
@@ -1088,7 +1106,8 @@ window.onload = async () => {
         } catch(e){}
     }
     refreshBadges();
-    if(t) { loadHistory(); tryRestoreTask(); }
+    // tryRestoreTask e chemat din updateUI → loadHistory (deja setat mode corect)
+    if(t) { tryRestoreTask(); }
 };
 
 // ===================== UI HELPERS =====================
@@ -1146,6 +1165,7 @@ function updateModelEtaChip(){
 
 function switchMode(m){
     mode=m; const isVid=m==='video';
+    try { localStorage.setItem('viralio_mode', m); } catch(e) {}
     document.getElementById('tab-image').classList.toggle('active',!isVid);
     document.getElementById('tab-video').classList.toggle('active',isVid);
     document.getElementById('og-img').style.display = isVid?'none':'';
@@ -1639,7 +1659,9 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
             const { urls } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-au generat imagini.');
-            setJobDone(jobId,urls,ratio,currentMode,[]); saveToSupabase(urls,promptText,currentMode,[]);
+            setJobDone(jobId,urls,ratio,currentMode,[]);
+            // ✅ Salvăm doar dacă serverul NU a salvat deja
+            if(!data?.saved_to_history) await saveToSupabase(urls,promptText,currentMode,[]);
         } else {
             const model_id=document.getElementById('model-sel').value;
             let statusMsg = 'Se trimite la AI...';
@@ -1655,9 +1677,11 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
             const data=await readSSEJob(jobId,resp);
             const { urls, uuids } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-a generat video.');
-            setJobDone(jobId,urls,ratio,currentMode,uuids); saveToSupabase(urls,promptText,currentMode,uuids);
+            setJobDone(jobId,urls,ratio,currentMode,uuids);
+            // ✅ Salvăm doar dacă serverul NU a salvat deja
+            if(!data?.saved_to_history) await saveToSupabase(urls,promptText,currentMode,uuids);
         }
-        setTimeout(loadHistory,2000);
+        setTimeout(loadHistory, 3000); // 3s pentru a da timp DB-ului să scrie
     } catch(err){
         // Mapăm erorile native de browser la mesaje prietenoase
         let msg = err.message || '';
@@ -1788,7 +1812,8 @@ async function submitExtend() {
         const { urls, uuids } = extractUrls(data);
         if(!urls?.length) throw new Error('Nu s-a generat video extend.');
         setJobDone(jobId, urls, ratio, 'video', uuids);
-        saveToSupabase(urls, prompt || 'Extend video', 'video', uuids);
+        // ✅ Salvăm doar dacă serverul NU a salvat deja
+        if(!data?.saved_to_history) saveToSupabase(urls, prompt || 'Extend video', 'video', uuids);
         setTimeout(loadHistory, 2000);
     } catch(err) {
         let msg = err.message || '';
@@ -1845,7 +1870,9 @@ async function generate(){
 // ===================== HISTORY =====================
 async function saveToSupabase(urls,promptText,jobMode,uuids){
     const token=getToken(); if(!token) return;
-    try { await fetch('/api/media/save-history',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({urls,type:jobMode||mode,prompt:promptText,uuids:uuids||[]})}); } catch(e){}
+    try {
+        await fetch('/api/media/save-history',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({urls,type:jobMode||mode,prompt:promptText,uuids:uuids||[]})});
+    } catch(e){}
 }
 
 let historyPage = 1;
@@ -1902,8 +1929,8 @@ async function loadHistory(append=false){
                 return `
                     <div class="aspect-video relative rounded-xl overflow-hidden transition-all hover:scale-[1.03]" style="border:1px solid rgba(255,255,255,0.06)">
                         <div onclick="openLightbox(window.currentHistoryMedia,${idx},'video')" class="absolute inset-0 cursor-pointer" style="z-index:1"></div>
-                        <video data-src="${url}" class="w-full h-full object-cover hist-video" preload="none" muted playsinline
-                            onerror="this.parentElement.style.opacity='0.3'"></video>
+                        <video data-src="${url}" class="w-full h-full object-cover hist-video" preload="none" muted playsinline crossorigin="anonymous"
+                            onerror="if(!this.dataset.retried){this.dataset.retried='1';setTimeout(()=>{this.src=this.dataset.src+'?r='+Date.now()},1000)}else{this.parentElement.style.opacity='0.3'}"></video>
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none" style="background:rgba(0,0,0,0.35);z-index:2">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.3);backdrop-filter:blur(4px)">
                                 <i class="fa-solid fa-play text-white text-xs ml-0.5"></i>
@@ -1960,11 +1987,21 @@ const videoObserver = new IntersectionObserver((entries) => {
             video.dataset.loaded = '1';
             video.src = video.dataset.src;
             video.preload = 'metadata';
-            video.addEventListener('loadedmetadata', () => { video.currentTime = 0.5; }, { once: true });
+            // ✅ Retry robust: dacă metadata nu se încarcă în 8s, reîncercăm cu cache-bust
+            const metaTimeout = setTimeout(() => {
+                if(video.readyState < 1 && !video.dataset.retried) {
+                    video.dataset.retried = '1';
+                    video.src = video.dataset.src + '?r=' + Date.now();
+                }
+            }, 8000);
+            video.addEventListener('loadedmetadata', () => {
+                clearTimeout(metaTimeout);
+                video.currentTime = 0.5;
+            }, { once: true });
         }
         videoObserver.unobserve(video);
     });
-}, { rootMargin: '200px' });
+}, { rootMargin: '300px' });
 
 function observeHistoryVideos(){
     document.querySelectorAll('.hist-video[data-src]').forEach(v => {
@@ -1999,11 +2036,9 @@ function tryRestoreTask() {
     const age = Date.now() - task.startedAt;
     if (age > TASK_MAX_AGE) { clearActiveTask(); return; }
 
-    // IMPORTANT: Restaurăm mode-ul la video dacă task-ul era video/extend
+    // Mode-ul e deja restaurat în window.onload — nu mai apelăm switchMode
+    // (care ar trigger loadHistory a doua oară și ar reseta paginarea)
     const restoredMode = (task.type === 'image') ? 'image' : 'video';
-    if (restoredMode !== mode) {
-        switchMode(restoredMode); // asta va face loadHistory() intern — îl înlocuim mai jos
-    }
 
     const restoredRatio = task.ratio || (restoredMode === 'image' ? '9:16' : '16:9');
     const restoredCount = task.count || 1;
@@ -2034,8 +2069,8 @@ async function _pollForResult(jobId, jobMode, ratio, prompt, startedAt) {
         clearActiveTask(); activeJobs.delete(jobId); return;
     }
 
-    const MAX_POLLS = 90;
-    const INTERVAL  = 8000;
+    const MAX_POLLS = 120;  // ~10 minute maxim
+    const INTERVAL  = 5000; // poll la fiecare 5 secunde
 
     for (let i = 0; i < MAX_POLLS; i++) {
         await new Promise(r => setTimeout(r, INTERVAL));
@@ -2050,15 +2085,17 @@ async function _pollForResult(jobId, jobMode, ratio, prompt, startedAt) {
             if (!res.ok) continue;
             const data = await res.json();
 
+            // Caută orice item generat DUPĂ ce a pornit task-ul (cu 10s toleranță)
             const found = (data.history || []).find(item => {
                 const itemTs = new Date(item.createdAt).getTime();
-                return itemTs > startedAt - 5000;
+                return itemTs > startedAt - 10000;
             });
 
             if (found) {
+                // Colectăm tot batch-ul cu același prompt și timestamp apropiat
                 const batchItems = (data.history || []).filter(item => {
                     const ts = new Date(item.createdAt).getTime();
-                    return ts > startedAt - 5000 && (item.prompt || '') === (found.prompt || '');
+                    return ts > startedAt - 10000 && (item.prompt || '') === (found.prompt || '');
                 });
 
                 const urls  = batchItems.map(i => i.supabaseUrl || i.originalUrl).filter(Boolean);
@@ -2066,11 +2103,12 @@ async function _pollForResult(jobId, jobMode, ratio, prompt, startedAt) {
 
                 setJobDone(jobId, urls.length ? urls : [found.supabaseUrl || found.originalUrl],
                            ratio, jobMode, uuids);
+                clearActiveTask();
                 setTimeout(loadHistory, 1000);
                 activeJobs.delete(jobId);
                 return;
             }
-        } catch(e) { /* rețea temporar căzută */ }
+        } catch(e) { /* rețea temporar căzută, continuăm */ }
     }
 
     setJobError(jobId, 'Generarea a durat prea mult sau a eșuat. Verifică istoricul.');
