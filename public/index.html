@@ -1770,7 +1770,7 @@ async function submitExtend() {
 
     const maxSec = _extendModel === 'grok' ? 50 : 130;
     startEtaTimer(jobId, maxSec);
-    markTaskActive(jobId, { type: 'extend', prompt, uuid: _extendUUID, model: model_id, ratio, count: 1 });
+    markTaskActive(jobId, { type: 'extend', prompt, uuid: _extendUUID, model: model_id });
 
     try {
         const fd = new FormData();
@@ -1836,9 +1836,9 @@ async function generate(){
         const modelId = document.getElementById('model-sel')?.value || '';
         const maxSec = (modelId.startsWith('grok-')) ? 50 : 130;
         startEtaTimer(jobId, maxSec);
-        markTaskActive(jobId, { type: 'video', prompt: promptText, model: modelId, ratio, count: vidCount });
+        markTaskActive(jobId, { type: 'video', prompt: promptText, model: modelId });
     } else {
-        markTaskActive(jobId, { type: 'image', prompt: promptText, ratio, count: imgCount });
+        markTaskActive(jobId, { type: 'image', prompt: promptText });
     }
 }
 
@@ -1909,8 +1909,8 @@ async function loadHistory(append=false){
                                 <i class="fa-solid fa-play text-white text-xs ml-0.5"></i>
                             </div>
                         </div>
-                        <div style="position:absolute;bottom:6px;right:6px;z-index:3;max-width:calc(100% - 12px)">
-                            <button data-url="${url}" data-uuid="${group.uuids[urlIdx]||''}" onclick="event.stopPropagation();openExtendModal(this.dataset.uuid,this.dataset.url)" style="display:flex;align-items:center;gap:4px;font-size:0.6rem;font-weight:800;padding:4px 8px;border-radius:8px;background:rgba(99,102,241,0.92);color:white;border:1px solid rgba(165,168,255,0.35);backdrop-filter:blur(4px);white-space:nowrap;cursor:pointer;max-width:100%;box-sizing:border-box"><i class="fa-solid fa-forward" style="font-size:0.5rem;flex-shrink:0"></i><span>Extindere</span></button>
+                        <div class="absolute bottom-1.5 right-1.5" style="z-index:3">
+                            <button data-url="${url}" data-uuid="${group.uuids[urlIdx]||''}" onclick="event.stopPropagation();openExtendModal(this.dataset.uuid,this.dataset.url)" class="flex items-center gap-1 text-[0.6rem] font-bold px-2 py-1 rounded-lg" style="background:rgba(99,102,241,0.88);color:white;border:1px solid rgba(165,168,255,0.3);backdrop-filter:blur(4px)"><i class="fa-solid fa-forward" style="font-size:0.5rem"></i><span class="hidden sm:inline">Extindere</span><span class="sm:hidden">+</span></button>
                         </div>
                     </div>`;
             }).join('');
@@ -1956,156 +1956,91 @@ const videoObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if(!entry.isIntersecting) return;
         const video = entry.target;
-        if(video.dataset.src && !video.src) {
+        if(video.dataset.src && !video.dataset.loaded) {
+            video.dataset.loaded = '1';
             video.src = video.dataset.src;
             video.preload = 'metadata';
             video.addEventListener('loadedmetadata', () => { video.currentTime = 0.5; }, { once: true });
         }
         videoObserver.unobserve(video);
     });
-}, { rootMargin: '100px' });
+}, { rootMargin: '200px' });
 
 function observeHistoryVideos(){
     document.querySelectorAll('.hist-video[data-src]').forEach(v => {
-        if(!v.src) videoObserver.observe(v);
+        if(!v.dataset.loaded) videoObserver.observe(v);
     });
 }
 
-// ===================== TASK PERSISTENCE (reconstituire card după refresh) =====================
-
-const TASK_KEY = 'viralio_active_task';
-const TASK_MAX_AGE = 15 * 60 * 1000; // 15 minute
-
+// ===================== TASK PERSISTENCE (anti-refresh loss) =====================
 function markTaskActive(jobId, meta) {
     try {
-        localStorage.setItem(TASK_KEY, JSON.stringify({ jobId, startedAt: Date.now(), ...meta }));
+        localStorage.setItem('viralio_active_task', JSON.stringify({
+            jobId, startedAt: Date.now(), ...meta
+        }));
     } catch(e) {}
 }
-
 function clearActiveTask() {
-    try { localStorage.removeItem(TASK_KEY); } catch(e) {}
+    try { localStorage.removeItem('viralio_active_task'); } catch(e) {}
 }
 
-// Rulează imediat la încărcarea scriptului — înainte de DOMContentLoaded
-(function restoreTaskOnLoad() {
-    // Așteptăm DOM-ul
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _doRestore);
-    } else {
-        _doRestore();
-    }
+(function checkPendingTask() {
+    try {
+        const raw = localStorage.getItem('viralio_active_task');
+        if (!raw) return;
+        const task = JSON.parse(raw);
+        const age = Date.now() - task.startedAt;
+        // Dacă task-ul are sub 12 minute îl considerăm activ
+        if (age > 720000) { localStorage.removeItem('viralio_active_task'); return; }
+        // Afișăm banner după ce DOM-ul e gata
+        window.addEventListener('DOMContentLoaded', () => showRecoveryBanner(task));
+    } catch(e) { try { localStorage.removeItem('viralio_active_task'); } catch(e2){} }
 })();
 
-function _doRestore() {
-    let task;
-    try {
-        const raw = localStorage.getItem(TASK_KEY);
-        if (!raw) return;
-        task = JSON.parse(raw);
-    } catch(e) { clearActiveTask(); return; }
+function showRecoveryBanner(task) {
+    if (document.getElementById('recovery-banner')) return;
+    const type = task.type === 'extend' ? 'extindere video' : task.type === 'video' ? 'video' : 'imagini';
+    const banner = document.createElement('div');
+    banner.id = 'recovery-banner';
+    banner.style.cssText = [
+        'position:fixed','top:76px','left:50%','transform:translateX(-50%)',
+        'z-index:999999','display:flex','align-items:center','gap:14px',
+        'padding:14px 20px','border-radius:16px','font-size:0.85rem','font-weight:600',
+        'background:rgba(99,102,241,0.18)','border:1px solid rgba(99,102,241,0.45)',
+        'backdrop-filter:blur(20px)','box-shadow:0 16px 40px rgba(0,0,0,0.5)',
+        'color:white','max-width:520px','width:90%'
+    ].join(';');
+    banner.innerHTML = `
+        <div style="width:34px;height:34px;border-radius:10px;background:rgba(99,102,241,0.3);border:1px solid rgba(165,168,255,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="fa-solid fa-spinner fa-spin" style="color:#a5a8ff;font-size:0.85rem"></i>
+        </div>
+        <div style="flex:1;min-width:0">
+            <div style="font-size:0.82rem;font-weight:700;color:white">Generare ${type} în progres</div>
+            <div style="font-size:0.7rem;font-weight:500;color:rgba(255,255,255,0.5);margin-top:2px">Procesarea continuă pe server. Verifică istoricul când e gata.</div>
+        </div>
+        <button id="recovery-refresh-btn" style="padding:7px 14px;border-radius:10px;background:rgba(99,102,241,0.35);border:1px solid rgba(165,168,255,0.3);color:#a5a8ff;font-size:0.75rem;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0">
+            <i class="fa-solid fa-rotate mr-1"></i>Verifică
+        </button>
+        <button onclick="document.getElementById('recovery-banner').remove();clearActiveTask();" style="width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.4);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.7rem">
+            <i class="fa-solid fa-xmark"></i>
+        </button>`;
+    document.body.appendChild(banner);
 
-    const age = Date.now() - task.startedAt;
-    if (age > TASK_MAX_AGE) { clearActiveTask(); return; }
-
-    // Reconstituim cardul vizual cu shimmer exact ca la generare normală
-    const restoredJobId = ++jobCounter;
-    const restoredMode  = task.type === 'image' ? 'image' : 'video';
-    const restoredRatio = task.ratio || (restoredMode === 'image' ? '9:16' : '16:9');
-    const restoredCount = task.count || 1;
-    const restoredPrompt = task.prompt || '…';
-
-    activeJobs.set(restoredJobId, { aborted: false, reader: null, restored: true });
-
-    const card = createJobCard(restoredJobId, restoredPrompt, restoredMode, restoredCount, restoredRatio);
-    const jobsArea = document.getElementById('jobs-area');
-    if (jobsArea) {
-        jobsArea.prepend(card);
-        checkEmptyState();
-    }
-
-    // Mesaj în card că se recuperează
-    setJobStatus(restoredJobId, 'Se recuperează generarea după refresh…');
-
-    // Pornim ETA timer
-    if (restoredMode === 'video') {
-        const maxSec = (task.model || '').startsWith('grok') ? 50 : 130;
-        // Calculăm cât timp a trecut deja și ajustăm maxSec
-        const elapsed = Math.floor(age / 1000);
-        startEtaTimer(restoredJobId, Math.max(maxSec - elapsed, 5));
-    }
-
-    // Polling pe history până apare rezultatul nou (comparam cu timestamp-ul de start)
-    _pollForResult(restoredJobId, restoredMode, restoredRatio, restoredPrompt, task.startedAt);
-}
-
-async function _pollForResult(jobId, jobMode, ratio, prompt, startedAt) {
-    const token = getToken();
-    if (!token) {
-        // Nu e logat — nu putem recupera, curățăm
-        setJobError(jobId, 'Sesiune expirată după refresh. Regenerează.');
+    // Butonul Verifică reîncarcă istoricul și ascunde bannerul
+    document.getElementById('recovery-refresh-btn').onclick = async () => {
+        await loadHistory();
+        // Dacă istoricul s-a reîncărcat și bannerul mai e acolo, îl lăsăm până userul îl închide
+        document.getElementById('recovery-banner')?.remove();
         clearActiveTask();
-        activeJobs.delete(jobId);
-        return;
-    }
+    };
 
-    const MAX_POLLS = 90;   // 90 × 8s = 12 minute
-    const INTERVAL  = 8000;
-
-    for (let i = 0; i < MAX_POLLS; i++) {
-        await new Promise(r => setTimeout(r, INTERVAL));
-
-        // Dacă userul a anulat manual sau a pornit altă generare
-        const job = activeJobs.get(jobId);
-        if (!job) return;
-
-        try {
-            const res = await fetch(`/api/media/history?type=${jobMode}&page=1&limit=10`, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            if (!res.ok) continue;
-            const data = await res.json();
-
-            // Căutăm primul item apărut DUPĂ ce a pornit task-ul
-            const found = (data.history || []).find(item => {
-                const itemTs = new Date(item.createdAt).getTime();
-                return itemTs > startedAt - 5000; // 5s toleranță
-            });
-
-            if (found) {
-                // Am găsit rezultatul! Colectăm toate URL-urile din același batch (același prompt + tip)
-                const batchUrls = (data.history || [])
-                    .filter(item => {
-                        const ts = new Date(item.createdAt).getTime();
-                        return ts > startedAt - 5000 && (item.prompt || '') === (found.prompt || '');
-                    })
-                    .map(item => item.supabaseUrl || item.originalUrl)
-                    .filter(Boolean);
-
-                const batchUuids = (data.history || [])
-                    .filter(item => {
-                        const ts = new Date(item.createdAt).getTime();
-                        return ts > startedAt - 5000 && (item.prompt || '') === (found.prompt || '');
-                    })
-                    .map(item => item.uuid || '');
-
-                const urls = batchUrls.length ? batchUrls : [found.supabaseUrl || found.originalUrl];
-                const uuids = batchUuids.length ? batchUuids : [found.uuid || ''];
-
-                setJobDone(jobId, urls, ratio, jobMode, uuids);
-                // NU apelăm saveToSupabase — deja e salvat de backend
-                setTimeout(loadHistory, 1000);
-                activeJobs.delete(jobId);
-                return;
-            }
-        } catch(e) {
-            // rețea temporar căzută — continuăm polling
-        }
-    }
-
-    // Timeout — nu am găsit rezultatul
-    setJobError(jobId, 'Generarea a durat prea mult sau a eșuat. Verifică istoricul.');
-    clearActiveTask();
-    activeJobs.delete(jobId);
+    // Auto-refresh la fiecare 20s
+    const interval = setInterval(async () => {
+        if (!localStorage.getItem('viralio_active_task')) { clearInterval(interval); return; }
+        const b = document.getElementById('recovery-banner');
+        if (!b) { clearInterval(interval); return; }
+        await loadHistory();
+    }, 20000);
 }
 
 // ===================== THEME TOGGLE =====================
