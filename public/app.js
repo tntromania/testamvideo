@@ -356,7 +356,7 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
     const isLandscape=['16:9','21:9','3:2','4:3','5:4'].includes(ratioVal);
     const count=urls.length;
 
-    const makeCard=(url, idx)=>{
+const makeCard=(url, idx)=>{
         const el=document.createElement('div');
         el.className='result-card';
         const ts=Date.now()+idx;
@@ -366,7 +366,7 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
         } else {
             const uuid = (uuids && uuids[idx]) || '';
             const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
-            el.innerHTML=`<div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2 flex flex-col gap-1.5" style="border-top:1px solid rgba(255,255,255,0.05)"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35)" onmouseover="this.style.background='rgba(99,102,241,0.28)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'"><i class="fa-solid fa-forward text-[0.65rem]"></i> Extindere</button></div>`;
+            el.innerHTML=`<div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2 flex flex-col gap-1.5" style="border-top:1px solid rgba(255,255,255,0.05)"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="w-full text-xs font-bold px-2 py-2 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap flex-shrink-0" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35)" onmouseover="this.style.background='rgba(99,102,241,0.28)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'"><i class="fa-solid fa-forward text-[0.65rem]"></i> Extinde Video</button></div>`;
         }
         return el;
     };
@@ -389,7 +389,13 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
     body.appendChild(wrapper);
 }
 
-function setJobError(jobId, msg){ stopEtaTimer(jobId); clearActiveTask();
+function setJobError(jobId, msg){ stopEtaTimer(jobId); 
+    // Dacă eroarea este din cauza refresh-ului, NU ștergem task-ul din local storage,
+    // lăsând funcția tryRestoreTask() să repornească interfața!
+    if (!msg.includes('Conexiunea a fost întreruptă')) {
+        clearActiveTask(); 
+    }
+    
     const body=document.getElementById(`job-body-${jobId}`); const card=document.getElementById(`job-${jobId}`);
     if(!body) return;
     card.className='job-card error';
@@ -401,6 +407,22 @@ function setJobError(jobId, msg){ stopEtaTimer(jobId); clearActiveTask();
     const iconColor = isBlocked ? 'rgba(251,146,60,0.8)' : 'rgba(248,113,113,0.8)';
     const actionBtn = isBlocked ? `<button onclick="document.getElementById('prompt-in').value='';document.getElementById('prompt-in').focus();" class="text-xs font-bold px-4 py-2 rounded-xl mt-1 transition-all hover:scale-105" style="color:rgba(251,146,60,0.9);background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.2)">✏️ Modifică promptul și regenerează!</button>` : '';
     body.innerHTML=`<div class="flex flex-col items-center gap-2 py-4 w-full"><i class="fa-solid ${icon} text-2xl" style="color:${iconColor}"></i><p class="text-xs text-center max-w-xs leading-relaxed" style="color:rgba(255,255,255,0.4)">${escHtml(msg)}</p>${actionBtn}</div>`;
+}
+
+function _addCloseBtn(card){
+    const header = card.querySelector('div[style*="border-bottom"]');
+    if(header && !header.querySelector('.job-close-btn')){
+        const xBtn = document.createElement('button');
+        xBtn.className='job-close-btn shrink-0 ml-2 w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:scale-110';
+        xBtn.style.cssText='background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.35)';
+        xBtn.innerHTML='<i class="fa-solid fa-xmark text-[0.6rem]"></i>';
+        xBtn.onclick=()=>{ 
+            clearActiveTask(); // Acum trebuie șters manual doar dacă utilizatorul închide explicit cardul de eroare
+            card.style.transition='opacity 0.3s,transform 0.3s'; card.style.opacity='0'; card.style.transform='scale(0.97)'; 
+            setTimeout(()=>{ card.remove(); checkEmptyState(); },300); 
+        };
+        header.appendChild(xBtn);
+    }
 }
 
 // ===================== SSE READER =====================
