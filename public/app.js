@@ -366,7 +366,7 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
         } else {
             const uuid = (uuids && uuids[idx]) || '';
             const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
-            el.innerHTML=`<div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2.5 flex gap-2" style="border-top:1px solid rgba(255,255,255,0.05)"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="flex-1 text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35)" onmouseover="this.style.background='rgba(99,102,241,0.28)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'"><i class="fa-solid fa-forward text-[0.65rem]"></i> Extindere</button></div>`;
+            el.innerHTML=`<div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2 flex flex-col gap-1.5" style="border-top:1px solid rgba(255,255,255,0.05)"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35)" onmouseover="this.style.background='rgba(99,102,241,0.28)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'"><i class="fa-solid fa-forward text-[0.65rem]"></i> Extindere</button></div>`;
         }
         return el;
     };
@@ -694,12 +694,13 @@ async function _pollForResult(jobId, jobMode, ratio, prompt, startedAt) {
             const data = await res.json();
             const found = (data.history || []).find(item => {
                 const itemTs = new Date(item.createdAt).getTime();
-                return itemTs > startedAt - 10000;
+                // Căutăm videoclipuri create DUPĂ momentul start-ului taskului (cu 3s toleranță pentru clock skew)
+                return itemTs >= startedAt - 3000;
             });
             if (found) {
                 const batchItems = (data.history || []).filter(item => {
                     const ts = new Date(item.createdAt).getTime();
-                    return ts > startedAt - 10000 && (item.prompt || '') === (found.prompt || '');
+                    return ts >= startedAt - 3000 && (item.prompt || '') === (found.prompt || '');
                 });
                 const urls  = batchItems.map(i => i.supabaseUrl || i.originalUrl).filter(Boolean);
                 const uuids = batchItems.map(i => i.uuid || '');
