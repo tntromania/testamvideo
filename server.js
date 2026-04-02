@@ -134,12 +134,14 @@ if (process.env.MONGO_URI) {
 }
 
 const HistorySchema = new mongoose.Schema({
-    userId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
     type: { type: String, enum: ['image', 'video'], required: true },
     originalUrl: String, supabaseUrl: String, prompt: String,
     uuid: { type: String, default: null },
     createdAt: { type: Date, default: Date.now }
 });
+// ✅ Index compus pentru verificare duplicate rapidă
+HistorySchema.index({ userId: 1, originalUrl: 1 });
 const History = mongoose.models.History || mongoose.model('History', HistorySchema);
 
 const LogSchema = new mongoose.Schema({
@@ -391,9 +393,17 @@ app.post('/api/media/image', authenticate, upload.array('ref_images', 5), async 
         await Log.create({ userEmail: req.user.email, type: 'image', count: urls.length, cost: actualCost }).catch(() => {});
         try { await hubAPI.useCredits(req.userId, actualCost); } catch (e) { console.error('Eroare scădere credite:', e.message); }
 
+        // ✅ Salvăm istoricul pe SERVER — nu mai depindem de client
+        try {
+            for (const url of urls) {
+                await History.create({ userId: req.userId, type: 'image', originalUrl: url, supabaseUrl: url, prompt: prompt || finalPrompt });
+            }
+            console.log(`[Imagini] 📝 Istoric salvat server-side: ${urls.length} imagini`);
+        } catch (histErr) { console.error('[Imagini] ⚠️ Eroare salvare istoric server-side:', histErr.message); }
+
         console.log(`[Imagini] ✅ ${urls.length}/${count} imagini gata în ${elapsed()} | -${actualCost} cr | ${req.user.email}`);
 
-        res.write(`data: ${JSON.stringify({ file_urls: urls })}\n\n`);
+        res.write(`data: ${JSON.stringify({ file_urls: urls, saved_to_history: true })}\n\n`);
         res.write('data: [DONE]\n\n'); res.end();
 
     } catch (e) {
@@ -528,7 +538,7 @@ app.post('/api/media/video',
         const sendDone = (urls, uuids) => {
             clearKeepAlive();
             if (!res.writableEnded && !clientAborted) {
-                res.write(`data: ${JSON.stringify({ file_urls: urls, file_uuids: uuids || [] })}\n\n`);
+                res.write(`data: ${JSON.stringify({ file_urls: urls, file_uuids: uuids || [], saved_to_history: true })}\n\n`);
                 res.write('data: [DONE]\n\n'); res.end();
             }
         };
@@ -768,6 +778,19 @@ app.post('/api/media/video',
             await Log.create({ userEmail: req.user.email, type: 'video', count: videoUrls.length, cost: actualCost }).catch(() => {});
             try { await hubAPI.useCredits(req.userId, actualCost); } catch (e) { console.error('Eroare scădere credite video:', e.message); }
 
+            // ✅ Salvăm istoricul pe SERVER — nu mai depindem de client
+            try {
+                for (let i = 0; i < videoUrls.length; i++) {
+                    await History.create({
+                        userId: req.userId, type: 'video',
+                        originalUrl: videoUrls[i].url, supabaseUrl: videoUrls[i].url,
+                        prompt: prompt || finalPrompt,
+                        uuid: videoUrls[i].uuid || null,
+                    });
+                }
+                console.log(`[Video] 📝 Istoric salvat server-side: ${videoUrls.length} videoclipuri`);
+            } catch (histErr) { console.error('[Video] ⚠️ Eroare salvare istoric server-side:', histErr.message); }
+
             console.log(`[Video] ✅ ${videoUrls.length}/${count} gata în ${elapsed()} | -${actualCost} cr | ${emailTag}`);
             // Trimitem URL-urile și UUID-urile pentru extend
             const plainUrls = videoUrls.map(v => v.url);
@@ -813,15 +836,20 @@ app.post('/api/media/save-history', authenticate, async (req, res) => {
     const { urls, type, prompt, uuids } = req.body;
     if (!urls || !urls.length) return res.status(400).json({ error: 'Fără URL-uri.' });
     try {
+        let savedCount = 0;
         for (let i = 0; i < urls.length; i++) {
+            // ✅ Verificăm dacă URL-ul există deja (protecție anti-duplicate)
+            const existing = await History.findOne({ userId: req.userId, originalUrl: urls[i] });
+            if (existing) { continue; }
             await History.create({
                 userId: req.userId, type,
                 originalUrl: urls[i], supabaseUrl: urls[i],
                 prompt,
                 uuid: (uuids && uuids[i]) ? uuids[i] : null,
             });
+            savedCount++;
         }
-        res.status(200).json({ message: 'Istoric salvat cu succes' });
+        res.status(200).json({ message: savedCount > 0 ? `${savedCount} salvate` : 'Deja existau în istoric' });
     } catch (err) { res.status(500).json({ error: 'Eroare server' }); }
 });
 
