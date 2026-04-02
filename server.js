@@ -137,6 +137,7 @@ const HistorySchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, required: true },
     type: { type: String, enum: ['image', 'video'], required: true },
     originalUrl: String, supabaseUrl: String, prompt: String,
+    uuid: { type: String, default: null },
     createdAt: { type: Date, default: Date.now }
 });
 const History = mongoose.models.History || mongoose.model('History', HistorySchema);
@@ -809,10 +810,17 @@ app.get('/api/media/history', authenticate, async (req, res) => {
 });
 
 app.post('/api/media/save-history', authenticate, async (req, res) => {
-    const { urls, type, prompt } = req.body;
+    const { urls, type, prompt, uuids } = req.body;
     if (!urls || !urls.length) return res.status(400).json({ error: 'Fără URL-uri.' });
     try {
-        for (const url of urls) await History.create({ userId: req.userId, type, originalUrl: url, supabaseUrl: url, prompt });
+        for (let i = 0; i < urls.length; i++) {
+            await History.create({
+                userId: req.userId, type,
+                originalUrl: urls[i], supabaseUrl: urls[i],
+                prompt,
+                uuid: (uuids && uuids[i]) ? uuids[i] : null,
+            });
+        }
         res.status(200).json({ message: 'Istoric salvat cu succes' });
     } catch (err) { res.status(500).json({ error: 'Eroare server' }); }
 });
