@@ -98,8 +98,9 @@ const validateImageForVideo = async (buffer, mimetype, label = 'imagine') => {
 const compressForVideo = async (buffer, mimetype, model = 'generic') => {
     try {
         // Grok API e sensibil la imagini mari — limităm la 768px și calitate 82
+        // Kling acceptă max 10MB, limităm la 896px
         // Veo acceptă imagini mai mari dar tot comprimăm pentru viteză
-        const maxDim = model === 'grok' ? 768 : 1024;
+        const maxDim = model === 'grok' ? 768 : model === 'kling' ? 896 : 1024;
         const quality = model === 'grok' ? 82 : 85;
         const compressed = await sharp(buffer)
             .resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true })
@@ -111,7 +112,7 @@ const compressForVideo = async (buffer, mimetype, model = 'generic') => {
         console.warn(`[Video] Comprimare eșuată, reîncerc fără mozjpeg: ${e.message}`);
         try {
             const meta = await sharp(buffer).metadata();
-            const maxDim = model === 'grok' ? 768 : 1024;
+            const maxDim = model === 'grok' ? 768 : model === 'kling' ? 896 : 1024;
             const compressed = await sharp(buffer)
                 .resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true })
                 .jpeg({ quality: 80 })
@@ -211,6 +212,10 @@ const MODEL_PRICES = {
     'veo-extend': 2,
     'grok-720p-6s': 2, 'grok-720p-10s': 2,
     'grok-extend': 2,
+    // Kling AI — preț per generare 5s, marjă ~70%
+    'kling-2-5-relax-5s': 10,  // $0.075 cost API
+    'kling-2-6-5s': 20,         // $0.15 cost API
+    'kling-3-0-5s': 34,         // $0.25 cost API
 };
 
 const fetchWithRetry = async (url, options, maxRetries = 6, delayMs = 5000) => {
@@ -358,7 +363,8 @@ app.post('/api/media/image', authenticate, upload.array('ref_images', 5), async 
                                             urls.push(publicUrl);
                                             completedCount++;
                                             console.log(`[Imagini] ✅ ${completedCount}/${count} gata: ${publicUrl}`);
-                                            if (!clientAborted) res.write(`data: ${JSON.stringify({ status: `${completedCount} din ${count} imagini gata...` })}\n\n`);
+                                            // ✅ Trimite imediat URL-ul parțial clientului — afișare progresivă
+                                            if (!clientAborted) res.write(`data: ${JSON.stringify({ partial_url: publicUrl, partial_index: completedCount - 1, partial_type: 'image', status: `${completedCount} din ${count} imagini gata...` })}\n\n`);
                                             return;
                                         } catch (uploadErr) {
                                             console.error(`[Imagini] ❌ R2 upload eșuat: ${uploadErr.message}`);
@@ -431,22 +437,55 @@ const toGeminiGenAspect = (ratio, isGrok) => {
     return ['9:16','3:4','2:3','4:5'].includes(ratio) ? '9:16' : '16:9';
 };
 
+// Kling suportă exact: 16:9, 9:16, 1:1
+const toKlingAspect = (ratio) => {
+    if (['9:16','3:4','4:5','2:3'].includes(ratio)) return '9:16';
+    if (ratio === '1:1') return '1:1';
+    return '16:9';
+};
+
 const DISCORD_CONTACT = 'alexcaba pe Discord (discord.gg/h8Ah6VKDzm)';
 
 const mapVideoError = (msg) => {
     if (!msg) return 'Eroare necunoscută la generarea video.';
-    if (msg.includes('PUBLIC_ERROR_SEXUAL') || msg.includes('sexual')) return '🚫 Conținutul a fost blocat: elemente inadecvate.';
-    if (msg.includes('UNSAFE_GENERATION') || msg.includes('unsafe') || msg.includes('PUBLIC_ERROR_DANGER_FILTER') || msg.includes('safety'))
-        return '🚫 Conținut blocat de filtrul de siguranță. Modifică promptul.';
-    if (msg.includes('AUDIO_FILTERED')) return '🚫 Audio-ul filtrat — conține elemente inadecvate.';
+
+    // ── Conținut blocat: sexual / minori / personaje protejate ──────────────
+    if (msg.includes('PUBLIC_ERROR_SEXUAL') || msg.includes('sexual')) {
+        return '🚫 Promptul sau imaginea a fost blocată de filtrele Google (conținut inadecvat sau personaj perceput ca minor).\n\n' +
+               '❌ Reîncercarea cu același prompt/imagine NU va funcționa.\n\n' +
+               '✏️ Ce poți face:\n' +
+               '• Reformulează complet promptul — evită cuvinte afectuoase adresate personajelor\n' +
+               '• Dacă folosești o imagine de referință, încearcă fără ea\n' +
+               '• Evită personaje antropomorfizate (animale/fructe cu față de copil)';
+    }
+    if (msg.includes('UNSAFE_GENERATION') || msg.includes('unsafe') || msg.includes('PUBLIC_ERROR_DANGER_FILTER') || msg.includes('safety') ||
+        msg.toLowerCase().includes('describe children') || msg.toLowerCase().includes('celebrity') || msg.toLowerCase().includes('third-party content')) {
+        return '🚫 Promptul conține cuvinte blocate de politicile Google (personaje cunoscute, minori sau conținut protejat).\n\n' +
+               '❌ Reîncercarea cu același prompt NU va funcționa.\n\n' +
+               '✏️ Ce poți face:\n' +
+               '• Reformulează complet — descrie acțiunea fără a numi personajul sau a folosi replici\n' +
+               '• Înlocuiește cuvintele afectuoase ("scumpo", "drăguț", "copilul") cu termeni neutri\n' +
+               '• Dacă folosești imagine de referință, încearcă fără ea';
+    }
+
+    if (msg.toLowerCase().includes('reference image violates') || msg.toLowerCase().includes('reference image')) {
+        return '🚫 Imaginea de referință a fost blocată de moderare.\n\n' +
+               '❌ Reîncercarea cu aceeași imagine NU va funcționa.\n\n' +
+               '✏️ Ce poți face:\n' +
+               '• Generează videoul fără imagine de referință\n' +
+               '• Folosește o imagine de referință diferită (peisaj, obiect, textură)\n' +
+               '• Personajele antropomorfizate (fructe cu față, animale cartoon) sunt adesea blocate';
+    }
+
+    if (msg.includes('AUDIO_FILTERED')) return '🚫 Audio-ul a fost filtrat (conținut inadecvat în replici/sunet). Modifică promptul sau elimină replicile.';
     if (msg.includes('TIMED_OUT') || msg.includes('TIMEOUT') || msg.includes('timeout'))
         return 'Generarea a durat prea mult. Reîncearcă.';
     if (msg.includes('quota') || msg.includes('QUOTA') || msg.includes('rate limit') || msg.includes('RATE_LIMIT') || msg.includes('insufficient') || msg.includes('balance') || msg.includes('credit'))
         return `⚠️ Capacitatea serverelor AI atinsă. Contactează ${DISCORD_CONTACT}`;
     if (msg.includes('Create video error') || msg.includes('Create video failed'))
-        return '⚠️ Serverele AI au respins generarea. Posibile cauze: imaginea conține fețe celebre, sau promptul include oameni celebrii. Încearcă cu o altă imagine sau modifică promptul.';
+        return '⚠️ Serverele AI au respins generarea. Posibile cauze: imaginea conține fețe celebre sau promptul include personaje cunoscute. Încearcă fără imagine de referință sau modifică promptul.';
     if (msg === 'terminated' || msg.includes('UND_ERR') || msg.includes('other side closed') || msg.includes('Stream inchis'))
-        return '⚠️ Conexiunea cu serverele AI a fost intrerupta dupa toate reincercarile. Te rugam sa reincerci.';
+        return '⚠️ Conexiunea cu serverele AI a fost întreruptă după toate reîncercările. Te rugăm să reîncerci.';
     return msg.replace(/genaipro/gi, 'serverul AI').replace(/dubvoice/gi, 'serverul AI').replace(/geminigen/gi, 'serverul AI').replace(/\bGrok\b/gi, 'serverul video').replace(/\bVeo\s*3?\b/gi, 'serverul video');
 };
 
@@ -455,7 +494,12 @@ const isNonRetryableError = (msg) => {
     return msg.includes('PUBLIC_ERROR_DANGER_FILTER') || msg.includes('UNSAFE_GENERATION') ||
            msg.includes('AUDIO_FILTERED') || msg.includes('PUBLIC_ERROR_SEXUAL') ||
            msg.includes('quota') || msg.includes('QUOTA') || msg.includes('rate limit') ||
-           msg.includes('RATE_LIMIT') || msg.includes('insufficient') || msg.includes('balance');
+           msg.includes('RATE_LIMIT') || msg.includes('insufficient') || msg.includes('balance') ||
+           msg.includes('reference image violates') ||
+           msg.toLowerCase().includes('describe children') ||
+           msg.toLowerCase().includes('celebrity') ||
+           msg.toLowerCase().includes('third-party content') ||
+           msg.includes('content moderation');
 };
 
 // ── GeminiGen: Polling pe History API ────────────────────────────
@@ -481,6 +525,12 @@ const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, interv
                 const videoUrl = result.generated_video?.[0]?.video_url
                     || result.generated_video?.[0]?.url;
                 if (videoUrl) return { success: true, url: videoUrl };
+                // Kling returnează URL-ul în media_files
+                const klingUrl = result.media_files?.[0]?.url
+                    || result.media_files?.[0]?.video_url
+                    || result.media_files?.[0]?.resource_without_watermark
+                    || result.media_files?.[0]?.resource;
+                if (klingUrl) return { success: true, url: klingUrl };
                 // Fallback la alte câmpuri
                 const mediaUrl = result.generate_result || result.media_url || result.url;
                 if (mediaUrl) return { success: true, url: mediaUrl };
@@ -588,9 +638,10 @@ app.post('/api/media/video',
             const isGrokExtend = model_id === 'grok-extend';
             const isVeoExtend = model_id === 'veo-extend';
             const isVeo = model_id.startsWith('veo') && !isVeoExtend;
+            const isKling = model_id.startsWith('kling-');
 
             // ─── Determină endpoint și parametri ─────────────────────────
-            let apiEndpoint, apiModel, resolution, duration, grokAspect;
+            let apiEndpoint, apiModel, resolution, duration, grokAspect, klingMode;
 
             if (isGrok) {
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/grok';
@@ -610,6 +661,18 @@ app.post('/api/media/video',
                 resolution = '1080p';
                 duration = 8;
                 grokAspect = toGeminiGenAspect(aspect_ratio, false);
+            } else if (isKling) {
+                apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/kling';
+                if (model_id === 'kling-2-5-relax-5s') {
+                    apiModel = 'kling-video-2-5'; klingMode = 'relax';
+                } else if (model_id === 'kling-2-6-5s') {
+                    apiModel = 'kling-video-2-6'; klingMode = 'standard';
+                } else {
+                    apiModel = 'kling-video-3-0'; klingMode = 'standard';
+                }
+                resolution = '720p'; // informativ
+                duration = 5;
+                grokAspect = toKlingAspect(aspect_ratio);
             } else {
                 // Veo 3.1 Fast
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/veo';
@@ -631,8 +694,11 @@ app.post('/api/media/video',
             // ─── Trimitem cererile paralel (count videoclipuri) ─────────
             const videoUrls = [];
             let lastVideoError = null;
+            let nonRetryableHit = false; // ← dacă un job primește eroare fatală, oprim tot
             const videoPromises = Array.from({ length: count }, async (_, idx) => {
                 if (clientAborted) return;
+                // Dacă un alt job a primit eroare fatală de content policy, nu mai trimitem cereri noi
+                if (nonRetryableHit) return;
 
                 try {
                     // Build multipart form data
@@ -649,18 +715,37 @@ app.post('/api/media/video',
                     } else {
                         // ── Generare normală ──────────────────────────────
                         formData.append('model', apiModel);
-                        formData.append('resolution', resolution);
+                        if (!isKling) {
+                            formData.append('resolution', resolution);
+                        }
 
-                        if (isGrok) {
+                        if (isKling) {
+                            // ── Kling AI: mode, aspect_ratio, duration, ref_images opționale ──
+                            formData.append('mode', klingMode);
+                            formData.append('aspect_ratio', grokAspect);
+                            formData.append('duration', String(duration));
+                            const klingRefs = refImages.slice(0, 4);
+                            for (const ref of klingRefs) {
+                                const compressed = await compressForVideo(ref.buffer, ref.mimetype, 'kling');
+                                const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                formData.append('ref_images', blob, 'ref.jpg');
+                            }
+                            // Imagine start ca referință stilistică dacă e disponibilă
+                            if (startImageFile && klingRefs.length < 4) {
+                                const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'kling');
+                                const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                formData.append('ref_images', blob, 'ref_start.jpg');
+                            }
+                        } else if (isGrok) {
                             formData.append('aspect_ratio', grokAspect);
                             formData.append('duration', String(duration));
                         } else {
                             formData.append('aspect_ratio', grokAspect);
                         }
 
-                        // Grok: fișiere în 'files' | Veo: fișiere în 'ref_images'
+                        // Grok: fișiere în 'files' | Veo: fișiere în 'ref_images' | Kling: deja tratat mai sus
                         const compressModel = isGrok ? 'grok' : 'veo';
-                        if (isGrok) {
+                        if (!isKling && isGrok) {
                             if (startImageFile) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'grok');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
@@ -678,7 +763,8 @@ app.post('/api/media/video',
                                     formData.append('files', blob, `ref.jpg`);
                                 }
                             }
-                        } else {
+                        } else if (!isKling) {
+                            // Veo: fișiere în 'ref_images'
                             if (startImageFile) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'veo');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
@@ -755,15 +841,27 @@ app.post('/api/media/video',
                         // Salvăm și UUID-ul GeminiGen pentru extend
                         videoUrls.push({ url: finalUrl, uuid });
                         console.log(`[Video] ✅ ${idx+1}/${count} gata: ${finalUrl} | uuid=${uuid} | ${emailTag}`);
-                        if (!clientAborted) sendStatus(`${videoUrls.length} din ${count} videoclipuri gata...`);
+                        // ✅ Trimite imediat URL-ul parțial clientului — afișare progresivă
+                        if (!clientAborted) {
+                            res.write(`data: ${JSON.stringify({ partial_url: finalUrl, partial_uuid: uuid, partial_index: videoUrls.length - 1, partial_type: 'video', status: `${videoUrls.length} din ${count} videoclipuri gata...` })}\n\n`);
+                        }
                     } else {
                         lastVideoError = result.error;
                         console.error(`[Video] ❌ ${idx+1}/${count}: ${result.error} | ${emailTag}`);
+                        // Dacă eroarea e fatală (content policy) oprim imediat toate cererile paralele
+                        if (isNonRetryableError(result.error)) {
+                            nonRetryableHit = true;
+                            console.warn(`[Video] 🛑 Eroare non-retryable detectată, opresc toate cererile paralele | ${emailTag}`);
+                        }
                         if (count === 1) throw new Error(result.error);
                     }
 
                 } catch (e) {
                     console.error(`[Video] ❌ Video ${idx+1} eroare: ${e.message} | ${emailTag}`);
+                    if (isNonRetryableError(e.message)) {
+                        nonRetryableHit = true;
+                        lastVideoError = e.message;
+                    }
                     if (count === 1) throw e;
                 }
             });

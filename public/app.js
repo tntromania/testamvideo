@@ -6,7 +6,11 @@ const MODEL_META = {
     'veo-extend':   { type:'video', cost:2 },
     'grok-720p-6s': { type:'video', cost:2 },
     'grok-720p-10s':{ type:'video', cost:2 },
-    'grok-extend':  { type:'video', cost:2 }
+    'grok-extend':  { type:'video', cost:2 },
+    // Kling AI — premium video
+    'kling-2-5-relax-5s': { type:'video', cost:10 },
+    'kling-2-6-5s':       { type:'video', cost:20 },
+    'kling-3-0-5s':       { type:'video', cost:34 },
 };
 let mode = 'image';
 let imgCount = 1;
@@ -56,7 +60,8 @@ window.onload = async () => {
         document.getElementById('og-img').style.display = 'none';
         document.getElementById('og-vid').style.display = '';
         document.getElementById('og-grok').style.display = '';
-        ddocument.getElementById('model-sel').value = 'grok-720p-6s';
+        document.getElementById('og-kling').style.display = '';
+        document.getElementById('model-sel').value = 'grok-720p-6s';
         updateModelEtaChip();
         document.getElementById('img-options').classList.add('hidden');
         document.getElementById('vid-options').classList.remove('hidden');
@@ -102,6 +107,10 @@ function updateModelEtaChip(){
     } else if(modelId.startsWith('veo')){
         chip.style.display = 'flex';
         chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">${modelId==='veo-extend'?'🔗':'⏳'}</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(167,139,250,0.9);letter-spacing:0.02em">1–2 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${modelId==='veo-extend'?'Veo Extend · continuă video':'servere aglomerate'}</span></div></div>`;
+    } else if(modelId.startsWith('kling-')){
+        const klingLabel = modelId==='kling-2-5-relax-5s' ? 'Kling 2.5 Relax · calitate bună, rapid' : modelId==='kling-2-6-5s' ? 'Kling 2.6 · calitate superioară' : 'Kling 3.0 · calitate premium';
+        chip.style.display = 'flex';
+        chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">🎬</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(251,196,60,0.9);letter-spacing:0.02em">2–4 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${klingLabel}</span></div></div>`;
     } else {
         chip.style.display = 'none';
         chip.innerHTML = '';
@@ -116,6 +125,7 @@ function switchMode(m){
     document.getElementById('og-img').style.display = isVid?'none':'';
     document.getElementById('og-vid').style.display = isVid?'':'none';
     document.getElementById('og-grok').style.display = isVid?'':'none';
+    document.getElementById('og-kling').style.display = isVid?'':'none';
     document.getElementById('model-sel').value = isVid?'grok-720p-6s':'gemini-flash';
     updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
@@ -255,15 +265,50 @@ function buildShimmerLoading(currentMode, count, ratio, modelId) {
     const aspectCSS = ratioMap[ratio] || '1/1';
     const isPortrait = ['9:16','4:5','3:4','2:3'].includes(ratio);
     const isLandscape = ['16:9','21:9','3:2','4:3','5:4'].includes(ratio);
-    const cardW = isPortrait ? '110px' : isLandscape ? '175px' : '140px';
-    const header = `<div class="flex items-center gap-3 mb-3"><div class="w-8 h-8 rounded-xl shimmer-box shrink-0"></div><div class="flex-1"><div class="h-3 rounded-full shimmer-box mb-2" style="width:60%"></div><div class="h-2.5 rounded-full shimmer-box" style="width:40%;opacity:0.6"></div></div></div>`;
+    // Dimensiuni placeholder similare cu cardurile finale
+    const cardW = isPortrait ? '140px' : isLandscape ? '220px' : '180px';
+    // Grid wrapper similar cu setJobDone pentru consistență vizuală
+    const maxW = count === 1
+        ? (isPortrait ? '210px' : isLandscape ? '460px' : '280px')
+        : (isPortrait ? (count<=2?'340px':count===3?'500px':'660px') : (isLandscape ? '100%' : (count<=2?'420px':'560px')));
+    const gridCols = count === 1 ? '1fr'
+        : (isPortrait ? `repeat(${Math.min(count,4)},1fr)` : (isLandscape ? 'repeat(2,1fr)' : `repeat(${Math.min(count,2)},1fr)`));
+
+    // Fiecare placeholder are data-slot pentru înlocuire progresivă
     const placeholders = Array.from({length: count}, (_, i) =>
-        `<div class="rounded-xl shimmer-box shrink-0" style="aspect-ratio:${aspectCSS};width:${cardW};animation-delay:${i*0.15}s"></div>`
+        `<div class="rounded-xl shimmer-box" data-slot="${i}" style="aspect-ratio:${aspectCSS};animation-delay:${i*0.15}s;transition:opacity 0.3s"></div>`
     ).join('');
 
-    // Returnăm doar scheletul curat (header + placeholders).
-    // Am lăsat elementul status ascuns (display:none) doar ca sistemul tău să nu dea eroare în consolă când încearcă să-i dea update în background.
-    return `<div class="flex flex-col gap-3">${header}<div class="flex gap-2 justify-center flex-wrap">${placeholders}</div><p id="job-status-JOBID" style="display:none;"></p></div>`;
+    return `<div style="padding:12px"><div id="job-media-grid-JOBID" style="display:grid;grid-template-columns:${gridCols};gap:10px;max-width:${maxW};margin:0 auto">${placeholders}</div></div><p id="job-status-JOBID" style="display:none;"></p>`;
+}
+
+// ===================== PROGRESSIVE RENDER =====================
+// Înlocuiește un shimmer placeholder cu media reală când vine partial_url
+function renderPartialResult(jobId, url, uuid, slotIndex, totalCount, ratio, mediaType, allPartialUrls, allPartialUuids){
+    const grid = document.getElementById(`job-media-grid-${jobId}`);
+    if(!grid) return;
+    const slot = grid.querySelector(`[data-slot="${slotIndex}"]`);
+    if(!slot) return;
+
+    const ratioMap = {'9:16':'9/16','16:9':'16/9','1:1':'1/1','4:5':'4/5','5:4':'5/4','3:4':'3/4','4:3':'4/3','2:3':'2/3','3:2':'3/2','21:9':'21/9'};
+    const aspectCSS = ratioMap[ratio] || '1/1';
+    const ts = Date.now() + slotIndex;
+
+    const el = document.createElement('div');
+    el.className = 'result-card';
+    el.dataset.slot = slotIndex;
+    el.style.cssText = 'border-radius:14px;overflow:hidden;animation:fadeInUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards';
+
+    if(mediaType === 'image'){
+        const allStr = JSON.stringify(allPartialUrls);
+        el.innerHTML = `<div class="${aspectClass(ratio)} w-full relative group overflow-hidden" style="border-radius:14px 14px 0 0"><img src="${url}" class="absolute inset-0 w-full h-full object-cover"><div class="card-overlay"><button onclick='openLightbox(${allStr},${slotIndex},"image")' class="text-white backdrop-blur-md text-xs font-bold px-3 py-1.5 rounded-xl transition-all hover:scale-105" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2)"><i class="fa-solid fa-expand mr-1"></i>Mărește</button></div></div><div class="p-2.5" style="border-top:1px solid rgba(255,255,255,0.05)"><button onclick="downloadMedia('${url}','viralio_img_${ts}.png')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button></div>`;
+    } else {
+        const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
+        // ✅ Fix video: butoane pe un singur rând, fără text wrap, video vizibil
+        el.innerHTML = `<div class="${aspectClass(ratio)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2" style="border-top:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:6px"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" style="width:100%;font-size:0.72rem;font-weight:700;padding:6px 8px;border-radius:10px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-download" style="margin-right:4px"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid,this.dataset.url)" style="width:100%;font-size:0.72rem;font-weight:700;padding:6px 8px;border-radius:10px;color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-forward" style="font-size:0.6rem;margin-right:4px"></i>Extinde Video</button></div>`;
+    }
+
+    slot.replaceWith(el);
 }
 
 // ===================== ETA TIMER =====================
@@ -340,6 +385,30 @@ function setJobDone(jobId, urls, ratioVal, currentMode, uuids){ stopEtaTimer(job
     const isLandscape=['16:9','21:9','3:2','4:3','5:4'].includes(ratioVal);
     const count=urls.length;
 
+    // ✅ Dacă media a fost deja randată progresiv, înlocuim doar shimmer-ele rămase
+    const existingGrid = document.getElementById(`job-media-grid-${jobId}`);
+    if(existingGrid){
+        urls.forEach((url, idx) => {
+            // Verificăm dacă slotul a fost deja înlocuit cu media reală
+            const slot = existingGrid.querySelector(`[data-slot="${idx}"]`);
+            if(slot && slot.classList.contains('shimmer-box')){
+                // Slotul e încă shimmer — îl înlocuim
+                renderPartialResult(jobId, url, (uuids&&uuids[idx])||'', idx, count, ratioVal, currentMode, urls, uuids||[]);
+            }
+        });
+        // Eliminăm shimmer-ele rămase care nu au primit URL (erori parțiale)
+        existingGrid.querySelectorAll('.shimmer-box').forEach(el => el.remove());
+        // Actualizăm lightbox-ul pentru imagini (URL-urile complete sunt acum disponibile)
+        if(currentMode==='image'){
+            const allStr=JSON.stringify(urls);
+            existingGrid.querySelectorAll('.result-card img').forEach((img,idx)=>{
+                const btn = img.closest('.result-card')?.querySelector('button[onclick*="openLightbox"]');
+                if(btn) btn.setAttribute('onclick', `openLightbox(${allStr},${idx},"image")`);
+            });
+        }
+        return;
+    }
+
 const makeCard=(url, idx)=>{
         const el=document.createElement('div');
         el.className='result-card';
@@ -350,7 +419,8 @@ const makeCard=(url, idx)=>{
         } else {
             const uuid = (uuids && uuids[idx]) || '';
             const extendAttr = uuid ? `data-uuid="${uuid}" data-url="${url}"` : `data-url="${url}"`;
-            el.innerHTML=`<div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2 flex flex-col gap-1.5" style="border-top:1px solid rgba(255,255,255,0.05)"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" class="w-full text-xs font-bold px-3 py-2 rounded-xl transition-all" style="color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07)"><i class="fa-solid fa-download mr-1"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid, this.dataset.url)" class="w-full text-xs font-bold px-2 py-2 rounded-xl transition-all flex items-center justify-center gap-1 whitespace-nowrap flex-shrink-0" style="color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35)" onmouseover="this.style.background='rgba(99,102,241,0.28)'" onmouseout="this.style.background='rgba(99,102,241,0.15)'"><i class="fa-solid fa-forward text-[0.65rem]"></i> Extinde Video</button></div>`;
+            // ✅ Fix: butoane compacte, fără text wrap, video vizibil
+            el.innerHTML=`<div class="${aspectClass(ratioVal)} w-full relative overflow-hidden" style="background:#000;border-radius:14px 14px 0 0"><video src="${url}" controls playsinline preload="metadata" class="absolute inset-0 w-full h-full object-contain"></video></div><div class="p-2" style="border-top:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:6px"><button onclick="downloadMedia('${url}','viralio_vid_${ts}.mp4')" style="width:100%;font-size:0.72rem;font-weight:700;padding:6px 8px;border-radius:10px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-download" style="margin-right:4px"></i>Descarcă</button><button ${extendAttr} onclick="openExtendModal(this.dataset.uuid,this.dataset.url)" style="width:100%;font-size:0.72rem;font-weight:700;padding:6px 8px;border-radius:10px;color:rgba(165,168,255,0.9);background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><i class="fa-solid fa-forward" style="font-size:0.6rem;margin-right:4px"></i>Extinde Video</button></div>`;
         }
         return el;
     };
@@ -373,24 +443,74 @@ const makeCard=(url, idx)=>{
     body.appendChild(wrapper);
 }
 
-function setJobError(jobId, msg){ stopEtaTimer(jobId); 
-    // Dacă eroarea este din cauza refresh-ului, NU ștergem task-ul din local storage,
-    // lăsând funcția tryRestoreTask() să repornească interfața!
+function setJobError(jobId, msg){ stopEtaTimer(jobId);
     if (!msg.includes('Conexiunea a fost întreruptă')) {
-        clearActiveTask(); 
+        clearActiveTask();
     }
-    
+
     const body=document.getElementById(`job-body-${jobId}`); const card=document.getElementById(`job-${jobId}`);
     if(!body) return;
     card.className='job-card error';
     _addCloseBtn(card);
     const pulseWrap = card.querySelector('.pulse-ring');
     if(pulseWrap){ pulseWrap.classList.remove('pulse-ring'); const dot = pulseWrap.querySelector('div') || pulseWrap; dot.style.background = 'rgba(248,113,113,0.9)'; }
-    const isBlocked = msg && (msg.includes('sexuală') || msg.includes('blocat') || msg.includes('filtrat') || msg.includes('inadecvat') || msg.includes('siguranță') || msg.includes('Audio'));
+
+    // Detectăm eroarea specifică de format imagine (Failed to prepare reference image)
+    const isPrepareImageError = msg && (
+        msg.toLowerCase().includes('failed to prepare reference image') ||
+        msg.toLowerCase().includes('prepare reference image')
+    );
+    if (isPrepareImageError) {
+        msg = '⚠️ Imaginea de referință nu a putut fi procesată de AI.\n\nSoluție rapidă:\n• Convertește imaginea în format JPG\n• Folosește o imagine curată, needitată (fără filtre, watermark sau modificări)\n• Apoi încearcă din nou.';
+    }
+
+    // Detectăm dacă eroarea e din cauza imaginii de referință blocate (conținut)
+    const isImageBlocked = !isPrepareImageError && msg && (
+        msg.toLowerCase().includes('reference image') ||
+        msg.toLowerCase().includes('content moderation') ||
+        msg.toLowerCase().includes('imaginea de referinta') ||
+        msg.toLowerCase().includes('imaginea de start') ||
+        msg.toLowerCase().includes('imaginea de final')
+    );
+
+    // ★ FIX CRITIC: dacă imaginea e blocată, o resetăm automat
+    // altfel userul o retrimite fără să știe la fiecare Recreate
+    if (isImageBlocked) {
+        startFrameFile = null;
+        try {
+            document.getElementById('start-frame-img').src = '';
+            document.getElementById('start-frame-preview').classList.add('hidden');
+            document.getElementById('start-frame-zone').classList.remove('hidden');
+        } catch(e) {}
+        endFrameFile = null;
+        try {
+            document.getElementById('end-frame-img').src = '';
+            document.getElementById('end-frame-preview').classList.add('hidden');
+            document.getElementById('end-frame-zone').classList.remove('hidden');
+        } catch(e) {}
+        uploadedRefs = [];
+        try { renderRefGallery(); } catch(e) {}
+    }
+
+    const isBlocked = isImageBlocked || (msg && (
+        msg.includes('sexuala') || msg.includes('blocat') || msg.includes('filtrat') ||
+        msg.includes('inadecvat') || msg.includes('siguranta') || msg.includes('Audio') ||
+        msg.includes('politicile') || msg.includes('minori') || msg.includes('🚫')
+    ));
     const icon = isBlocked ? 'fa-ban' : 'fa-triangle-exclamation';
     const iconColor = isBlocked ? 'rgba(251,146,60,0.8)' : 'rgba(248,113,113,0.8)';
-    const actionBtn = isBlocked ? `<button onclick="document.getElementById('prompt-in').value='';document.getElementById('prompt-in').focus();" class="text-xs font-bold px-4 py-2 rounded-xl mt-1 transition-all hover:scale-105" style="color:rgba(251,146,60,0.9);background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.2)">✏️ Modifică promptul și regenerează!</button>` : '';
-    body.innerHTML=`<div class="flex flex-col items-center gap-2 py-4 w-full"><i class="fa-solid ${icon} text-2xl" style="color:${iconColor}"></i><p class="text-xs text-center max-w-xs leading-relaxed" style="color:rgba(255,255,255,0.4)">${escHtml(msg)}</p>${actionBtn}</div>`;
+
+    const formattedMsg = escHtml(msg).replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+
+    const actionBtn = isPrepareImageError
+        ? `<button onclick="document.getElementById('prompt-in').focus();" class="text-xs font-bold px-4 py-2 rounded-xl mt-1 transition-all hover:scale-105" style="color:rgba(251,196,60,0.9);background:rgba(251,196,60,0.1);border:1px solid rgba(251,196,60,0.25)">🖼️ Convertește imaginea în JPG și încearcă din nou</button>`
+        : isImageBlocked
+        ? `<button onclick="document.getElementById('prompt-in').focus();" class="text-xs font-bold px-4 py-2 rounded-xl mt-1 transition-all hover:scale-105" style="color:rgba(251,146,60,0.9);background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.2)">🖼️ Imaginea blocată a fost ștearsă — încearcă fără ea</button>`
+        : isBlocked
+            ? `<button onclick="document.getElementById('prompt-in').focus();" class="text-xs font-bold px-4 py-2 rounded-xl mt-1 transition-all hover:scale-105" style="color:rgba(251,146,60,0.9);background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.2)">✏️ Modifică promptul</button>`
+            : '';
+
+    body.innerHTML=`<div class="flex flex-col items-center gap-2 py-4 px-3 w-full"><i class="fa-solid ${icon} text-2xl" style="color:${iconColor}"></i><p class="text-xs text-left leading-relaxed" style="color:rgba(255,255,255,0.45);max-width:340px">${formattedMsg}</p>${actionBtn}</div>`;
 }
 
 function _addCloseBtn(card){
@@ -410,9 +530,12 @@ function _addCloseBtn(card){
 }
 
 // ===================== SSE READER =====================
-async function readSSEJob(jobId, response){
+async function readSSEJob(jobId, response, opts={}){
+    const { currentMode, ratio, count } = opts;
     const reader=response.body.getReader();
     const dec=new TextDecoder(); let buf=''; let finalData={}; let lastError=null;
+    // State pentru afișare progresivă
+    const partialUrls=[]; const partialUuids=[];
     try {
         while(true){
             const {done,value}=await reader.read();
@@ -428,7 +551,17 @@ async function readSSEJob(jobId, response){
                         try {
                             const p=JSON.parse(raw);
                             if(p.error){ lastError=p.error; continue; }
+                            // ✅ Afișare progresivă: fiecare media gata vine separat
+                            if(p.partial_url){
+                                partialUrls.push(p.partial_url);
+                                partialUuids.push(p.partial_uuid||'');
+                                const mediaType = p.partial_type || currentMode || 'image';
+                                if(p.status) setJobStatus(jobId, p.status);
+                                renderPartialResult(jobId, p.partial_url, p.partial_uuid||'', partialUrls.length-1, count||1, ratio, mediaType, partialUrls, partialUuids);
+                                continue;
+                            }
                             if(p.status&&Object.keys(p).length===1){ setJobStatus(jobId,p.status); continue; }
+                            if(p.status&&!p.file_urls&&!p.file_url&&!p.video_url&&!p.url&&!p.partial_url){ setJobStatus(jobId,p.status); continue; }
                             Object.assign(finalData,p);
                         } catch(e){}
                     }
@@ -437,9 +570,15 @@ async function readSSEJob(jobId, response){
             if(done) break;
         }
     } finally {}
-    if(lastError&&!finalData.file_urls&&!finalData.file_url&&!finalData.video_url&&!finalData.url) throw new Error(lastError);
-    if(!lastError && Object.keys(finalData).length===0) throw new Error('Conexiunea a fost întreruptă. Reîncearcă.');
-    return Object.keys(finalData).length>0?finalData:null;
+    if(lastError&&!finalData.file_urls&&!finalData.file_url&&!finalData.video_url&&!finalData.url&&partialUrls.length===0) throw new Error(lastError);
+    if(!lastError && Object.keys(finalData).length===0){
+        if(partialUrls.length>0) return { file_urls: partialUrls, file_uuids: partialUuids, saved_to_history: true };
+        throw new Error('Conexiunea a fost întreruptă. Reîncearcă.');
+    }
+    const result = Object.keys(finalData).length>0 ? finalData : null;
+    if(result && !result.file_urls && partialUrls.length>0) result.file_urls = partialUrls;
+    if(result && !result.file_uuids && partialUuids.length>0) result.file_uuids = partialUuids;
+    return result;
 }
 
 function extractUrls(data){
@@ -465,7 +604,7 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             refs.forEach(f=>fd.append('ref_images',f,f.name));
             const resp=await fetch('/api/media/image',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
-            const data=await readSSEJob(jobId,resp);
+            const data=await readSSEJob(jobId,resp,{currentMode,ratio,count:imgCount});
             const { urls } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-au generat imagini.');
             setJobDone(jobId,urls,ratio,currentMode,[]);
             if(!data?.saved_to_history) await saveToSupabase(urls,promptText,currentMode,[]);
@@ -482,7 +621,7 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             refs.forEach(f=>fd.append('ref_images',f,f.name));
             const resp=await fetch('/api/media/video',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd});
             if(!resp.ok){ const j=await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
-            const data=await readSSEJob(jobId,resp);
+            const data=await readSSEJob(jobId,resp,{currentMode,ratio,count:vidCount});
             const { urls, uuids } = extractUrls(data); if(!urls?.length) throw new Error('Nu s-a generat video.');
             setJobDone(jobId,urls,ratio,currentMode,uuids);
             if(!data?.saved_to_history) await saveToSupabase(urls,promptText,currentMode,uuids);
@@ -577,7 +716,7 @@ async function submitExtend() {
         setJobStatus(jobId, 'Se trimite la AI pentru extend...');
         const resp = await fetch('/api/media/video', { method:'POST', headers:{'Authorization':'Bearer '+token}, body:fd });
         if(!resp.ok){ const j = await resp.json().catch(()=>{}); throw new Error(j?.error||'Eroare server'); }
-        const data = await readSSEJob(jobId, resp);
+        const data = await readSSEJob(jobId, resp, {currentMode:'video', ratio, count:1});
         const { urls, uuids } = extractUrls(data);
         if(!urls?.length) throw new Error('Nu s-a generat video extend.');
         setJobDone(jobId, urls, ratio, 'video', uuids);
@@ -618,7 +757,7 @@ async function generate(){
     runJob(jobId,promptText,currentMode,ratio,refs,token,startFrame,endFrame);
     if(currentMode==='video'){
         const modelId = document.getElementById('model-sel')?.value || '';
-        const maxSec = (modelId.startsWith('grok-')) ? 50 : 130;
+        const maxSec = (modelId.startsWith('grok-')) ? 50 : modelId.startsWith('kling-') ? 240 : 130;
         startEtaTimer(jobId, maxSec);
         markTaskActive(jobId, { type: 'video', prompt: promptText, model: modelId, ratio, count: vidCount });
     } else {
@@ -674,7 +813,7 @@ function tryRestoreTask() {
 
     if (restoredMode === 'video' || task.type === 'extend') {
         const elapsed = Math.floor(age / 1000);
-        const maxSec = (restoredModel || '').startsWith('grok') ? 50 : 130;
+        const maxSec = (restoredModel || '').startsWith('grok') ? 50 : (restoredModel || '').startsWith('kling') ? 240 : 130;
         startEtaTimer(restoredJobId, Math.max(maxSec - elapsed, 5));
     }
 

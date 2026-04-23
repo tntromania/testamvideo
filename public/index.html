@@ -332,6 +332,10 @@
         @keyframes slideUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
 
+        /* ---- FADE IN UP — afișare progresivă media ---- */
+        @keyframes fadeInUp { from { opacity:0; transform: translateY(12px) scale(0.96); } to { opacity:1; transform: translateY(0) scale(1); } }
+        .animate-fade-in { animation: fadeInUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+
         /* ---- STAT ORBS IN EMPTY STATE ---- */
         @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
         .float { animation: float 4s ease-in-out infinite; }
@@ -834,6 +838,11 @@
                         <optgroup label="Video (Grok 3) — 720p" id="og-grok" style="display:none">
                             <option value="grok-720p-6s" data-type="video" data-cost="2">Grok 3 · 720p · 6s ⚡ — 2 Credite</option>
                             <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
+                        </optgroup>
+                        <optgroup label="Video (Kling AI) — Premium 🎬" id="og-kling" style="display:none">
+                            <option value="kling-2-5-relax-5s" data-type="video" data-cost="10">Kling 2.5 Relax · 720p · 5s 💸 — 10 Credite</option>
+                            <option value="kling-2-6-5s" data-type="video" data-cost="20">Kling 2.6 · 720p · 5s ⚡ — 20 Credite</option>
+                            <option value="kling-3-0-5s" data-type="video" data-cost="34">Kling 3.0 · 720p · 5s 🏆 — 34 Credite</option>
                         </optgroup>
                     </select>
                 </div>
