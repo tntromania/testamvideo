@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Media Studio | Viralio</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
@@ -13,9 +13,9 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        display: ['Inter', 'sans-serif'],
-                        body: ['Inter', 'sans-serif'],
-                        sans: ['Inter', 'sans-serif']
+                        display: ['Syne', 'sans-serif'],
+                        body: ['DM Sans', 'sans-serif'],
+                        sans: ['DM Sans', 'sans-serif']
                     },
                     colors: {
                         viralio: {
@@ -35,7 +35,7 @@
             background: #07070f;
             color: #e8e8f0;
             overflow: hidden;
-            font-family: 'Inter', sans-serif;
+            font-family: 'DM Sans', sans-serif;
             -webkit-font-smoothing: antialiased;
         }
         ::-webkit-scrollbar { width: 4px; }
@@ -99,7 +99,7 @@
             border-radius: 12px;
             font-size: 0.82rem;
             font-weight: 700;
-            font-family: 'Inter', sans-serif;
+            font-family: 'DM Sans', sans-serif;
             cursor: pointer;
             transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
             display: flex;
@@ -121,15 +121,16 @@
 
         /* ---- SIDEBAR ---- */
         .sidebar-glass {
-            background: rgba(10,10,18,0.95);
-            border: 1px solid rgba(255,255,255,0.06);
-            backdrop-filter: blur(20px);
+            background: rgba(9,9,16,0.97);
+            border: 1px solid rgba(255,255,255,0.07);
+            backdrop-filter: blur(24px);
+            box-shadow: 4px 0 40px rgba(0,0,0,0.3);
         }
 
         /* ---- PANELS ---- */
-        .panel-s { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 20px 24px; }
+        .panel-s { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 22px 28px; }
         .panel-s:last-child { border-bottom: none; }
-        .field-label { font-size: 0.65rem; font-weight: 700; font-family: 'Inter', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); margin-bottom: 10px; display: block; }
+        .field-label { font-size: 0.6rem; font-weight: 700; font-family: 'Syne', sans-serif; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.25); margin-bottom: 12px; display: block; }
 
         /* ---- PROMPT AREA ---- */
         .prompt-wrap {
@@ -178,19 +179,22 @@
         /* ---- SELECT ---- */
         .styled-select {
             background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 12px;
-            padding: 11px 34px 11px 14px;
-            font-size: 0.84rem;
+            border: 1.5px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 13px 38px 13px 16px;
+            font-size: 0.87rem;
             font-weight: 600;
-            color: rgba(255,255,255,0.9);
+            font-family: 'DM Sans', sans-serif;
+            color: rgba(255,255,255,0.92);
             outline: none; width: 100%; -webkit-appearance: none; cursor: pointer; transition: all 0.2s;
+            letter-spacing: 0.01em;
         }
-        .styled-select:focus { border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.06); }
-        .styled-select option { background: #12121e; color: #e0e0f0; padding: 8px; }
-        .styled-select optgroup { background: #12121e; color: rgba(165,168,255,0.8); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+        .styled-select:focus { border-color: rgba(99,102,241,0.45); background: rgba(99,102,241,0.05); box-shadow: 0 0 0 3px rgba(99,102,241,0.08); }
+        .styled-select option { background: #0e0e1a; color: #e8e8f4; padding: 10px; font-family: 'DM Sans', sans-serif; }
+        .styled-select optgroup { background: #0d0d19; color: rgba(165,168,255,0.7); font-size: 0.68rem; font-weight: 700; font-family: 'Syne', sans-serif; text-transform: uppercase; letter-spacing: 0.1em; }
         .select-wrap { position: relative; }
-        .select-wrap::after { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.25); font-size: 0.65rem; pointer-events: none; }
+        .select-wrap::after { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.2); font-size: 0.6rem; pointer-events: none; transition: all 0.2s; }
+        .select-wrap:focus-within::after { color: rgba(165,168,255,0.5); }
 
         /* ---- GENERATE BUTTON ---- */
         .gen-btn {
@@ -321,7 +325,7 @@
             padding: 2px 10px;
             font-size: 0.7rem;
             font-weight: 800;
-            font-family: 'Inter', sans-serif;
+            font-family: 'DM Sans', sans-serif;
         }
 
         /* ---- PROCESSING ANIMATION ---- */
@@ -378,7 +382,7 @@
         html.light body {
             background: #f0f0f8;
             color: #1a1a2e;
-            font-family: 'Inter', sans-serif;
+            font-family: 'DM Sans', sans-serif;
             -webkit-font-smoothing: antialiased;
         }
         html.light body::before { opacity: 0.15; }
@@ -814,10 +818,10 @@
     </button>
 
     <!-- SIDEBAR -->
-    <aside id="sidebar-settings" class="sidebar-glass fixed md:relative bottom-0 left-0 right-0 md:inset-auto w-full md:w-[360px] rounded-t-[24px] md:rounded-[20px] flex flex-col shrink-0 h-[88vh] md:h-full overflow-hidden z-[100] md:z-10 transition-transform duration-300 translate-y-full md:translate-y-0">
+    <aside id="sidebar-settings" class="sidebar-glass fixed md:relative bottom-0 left-0 right-0 md:inset-auto w-full md:w-[440px] rounded-t-[28px] md:rounded-[24px] flex flex-col shrink-0 h-[88vh] md:h-full overflow-hidden z-[100] md:z-10 transition-transform duration-300 translate-y-full md:translate-y-0">
         <!-- Mobile handle -->
         <div class="md:hidden flex items-center justify-between px-6 pt-5 pb-3" style="border-bottom:1px solid rgba(255,255,255,0.05)">
-            <h3 class="font-display font-black text-white flex items-center gap-2 text-sm">
+            <h3 class="font-display font-black text-white flex items-center gap-2 text-sm tracking-tight">
                 <i class="fa-solid fa-sliders" style="color:rgba(255,255,255,0.3)"></i> Setări Generare
             </h3>
             <button onclick="toggleMobileSettings()" class="w-8 h-8 rounded-full flex items-center justify-center" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.5)"><i class="fa-solid fa-xmark"></i></button>
@@ -828,35 +832,9 @@
                 <label class="field-label">Model AI</label>
                 <div class="select-wrap">
                     <select id="model-sel" class="styled-select" onchange="onModelChange()">
-                        <optgroup label="Imagini (Gemini)" id="og-img">
-                            <option value="gemini-flash" data-type="image" data-cost="1">Nano Banana 4k (Rapid) ⚡ — 1 Credit</option>
-                            <option value="gemini-pro" data-type="image" data-cost="2">Nano Banana 4k (Pro) 💎 — 2 Credite</option>
-                        </optgroup>
-                        <optgroup label="Video (Veo)" id="og-vid" style="display:none">
-                            <option value="veo3.1-fast" data-type="video" data-cost="2">Veo 3.1 Fast · 1080p 🏆 — 2 Credite</option>
-                        </optgroup>
-                        <optgroup label="Video (Grok 3) — 720p" id="og-grok" style="display:none">
-                            <option value="grok-720p-6s" data-type="video" data-cost="2">Grok 3 · 720p · 6s ⚡ — 2 Credite</option>
-                            <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
-                        </optgroup>
-                        <optgroup label="🎬 Kling 3.0 — Text to Video" id="og-kling" style="display:none">
-                            <option value="kling-3-0-720p"  data-type="video">Kling 3.0 · 720p · 3–15s 🏆 (5s=6cr · 10s=12cr)</option>
-                            <option value="kling-3-0-1080p" data-type="video">Kling 3.0 · 1080p · 3–15s 💎 (5s=8cr · 10s=15cr)</option>
-                        </optgroup>
-                        <optgroup label="🎬 Kling 2.6 — Text to Video" id="og-kling-2-6" style="display:none">
-                            <option value="kling-2-6-720p"        data-type="video">Kling 2.6 · 720p · 5s=4cr / 10s=8cr</option>
-                            <option value="kling-2-6-1080p"       data-type="video">Kling 2.6 · 1080p 💎 · 5s=6cr / 10s=12cr</option>
-                            <option value="kling-2-6-1080p-audio" data-type="video">Kling 2.6 · 1080p + Audio 🎵 · 5s=9cr / 10s=17cr</option>
-                        </optgroup>
-                        <optgroup label="🎥 Kling Motion Control — preț fix" id="og-kling-motion" style="display:none">
-                            <option value="kling-motion-2-6-720p"  data-type="video">Kling 2.6 Motion · 720p — 4 Credite</option>
-                            <option value="kling-motion-2-6-1080p" data-type="video">Kling 2.6 Motion · 1080p 💎 — 6 Credite</option>
-                            <option value="kling-motion-3-720p"    data-type="video">Kling 3.0 Motion · 720p 🏆 — 6 Credite</option>
-                            <option value="kling-motion-3-1080p"   data-type="video">Kling 3.0 Motion · 1080p 💎🏆 — 10 Credite</option>
-                        </optgroup>
-                        <optgroup label="🌱 Bytedance Seedance 2 Fast" id="og-seedance" style="display:none">
-                            <option value="seedance-fast-480p" data-type="video">Seedance Fast · 480p · 4–15s ⚡ (5s=8cr · 10s=15cr)</option>
-                            <option value="seedance-fast-720p" data-type="video">Seedance Fast · 720p · 4–15s 💎 (5s=13cr · 10s=25cr)</option>
+                        <optgroup label="Imagini AI">
+                            <option value="gemini-flash">Nano Banana · Rapid</option>
+                            <option value="gemini-pro">Nano Banana · Pro</option>
                         </optgroup>
                     </select>
                 </div>
@@ -1013,16 +991,26 @@
         </div>
 
         <!-- GENERATE BUTTON AREA -->
-        <div id="gen-bar" class="shrink-0 p-5" style="border-top:1px solid rgba(255,255,255,0.05);background:rgba(10,10,18,0.8)">
+        <div id="gen-bar" class="shrink-0 px-6 py-5" style="border-top:1px solid rgba(255,255,255,0.06);background:rgba(9,9,16,0.95)">
             <div class="flex items-center justify-between mb-4">
-                <span class="text-[0.65rem] font-display font-black uppercase tracking-widest" style="color:rgba(255,255,255,0.3)">Cost Estimat</span>
-                <div class="flex items-center gap-1.5">
-                    <span class="text-xl font-display font-black text-yellow-400" id="total-cost">1</span>
-                    <i class="fa-solid fa-coins text-yellow-400 text-sm opacity-80"></i>
+                <div>
+                    <div class="text-[0.58rem] font-display font-bold uppercase tracking-[0.14em] mb-0.5" style="color:rgba(255,255,255,0.2)">Cost estimat</div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl font-display font-black" style="color:#f5c842;text-shadow:0 0 20px rgba(245,200,66,0.4)" id="total-cost">1</span>
+                        <span class="text-[0.72rem] font-display font-bold" style="color:rgba(245,200,66,0.5)">credite</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[0.58rem] font-bold uppercase tracking-[0.1em] mb-0.5" style="color:rgba(255,255,255,0.15)">Sold</div>
+                    <div class="flex items-center gap-1 justify-end">
+                        <i class="fa-solid fa-bolt text-xs" style="color:rgba(165,168,255,0.5)"></i>
+                        <span class="text-sm font-display font-black" style="color:rgba(255,255,255,0.5)" id="nav-credits-bar">—</span>
+                    </div>
                 </div>
             </div>
-            <button id="gen-btn" class="gen-btn w-full text-white py-4 rounded-2xl font-display font-black text-[1rem] flex items-center justify-center gap-2 shadow-lg" onclick="generate()">
-                <i class="fa-solid fa-wand-magic-sparkles" style="color:rgba(245,200,66,0.9)"></i> GENEREAZĂ
+            <button id="gen-btn" class="gen-btn w-full text-white py-4 rounded-2xl font-display font-black text-[0.95rem] flex items-center justify-center gap-2.5 shadow-lg tracking-wide" onclick="generate()">
+                <i class="fa-solid fa-wand-magic-sparkles" style="font-size:0.85rem;color:rgba(245,200,66,0.9)"></i>
+                GENEREAZĂ
             </button>
         </div>
     </aside>

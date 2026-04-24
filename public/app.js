@@ -35,6 +35,53 @@ let activeJobs = new Map();
 let jobCounter = 0;
 let lbMediaList = [], lbCurrentIndex = 0, lbCurrentType = 'image';
 
+
+// ═══════════════════════════════════════════════════════════════
+// MODEL SELECT — rebuild per mod (fix: optgroup display:none nu
+// funcționează în toate browserele; reconstruim DOM la fiecare switch)
+// ═══════════════════════════════════════════════════════════════
+const IMG_SELECT_HTML = `
+<optgroup label="Imagini AI">
+  <option value="gemini-flash">Nano Banana · Rapid</option>
+  <option value="gemini-pro">Nano Banana · Pro</option>
+</optgroup>`;
+
+const VID_SELECT_HTML = `
+<optgroup label="Video · Veo">
+  <option value="veo3.1-fast">Veo 3.1 Fast</option>
+</optgroup>
+<optgroup label="Video · Grok 3">
+  <option value="grok-720p-6s">Grok 3 · 6s</option>
+  <option value="grok-720p-10s">Grok 3 · 10s</option>
+</optgroup>
+<optgroup label="Kling 3.0">
+  <option value="kling-3-0-720p">Kling 3.0 · 720p</option>
+  <option value="kling-3-0-1080p">Kling 3.0 · 1080p</option>
+</optgroup>
+<optgroup label="Kling 2.6">
+  <option value="kling-2-6-720p">Kling 2.6 · 720p</option>
+  <option value="kling-2-6-1080p">Kling 2.6 · 1080p</option>
+  <option value="kling-2-6-1080p-audio">Kling 2.6 · Audio 1080p</option>
+</optgroup>
+<optgroup label="Kling Motion Control">
+  <option value="kling-motion-2-6-720p">Kling 2.6 Motion · 720p</option>
+  <option value="kling-motion-2-6-1080p">Kling 2.6 Motion · 1080p</option>
+  <option value="kling-motion-3-720p">Kling 3.0 Motion · 720p</option>
+  <option value="kling-motion-3-1080p">Kling 3.0 Motion · 1080p</option>
+</optgroup>
+<optgroup label="Seedance 2 Fast">
+  <option value="seedance-fast-480p">Seedance Fast · 480p</option>
+  <option value="seedance-fast-720p">Seedance Fast · 720p</option>
+</optgroup>`;
+
+function rebuildModelSelect(currentMode) {
+    const sel = document.getElementById('model-sel');
+    if (!sel) return;
+    const isVid = currentMode === 'video';
+    sel.innerHTML = isVid ? VID_SELECT_HTML : IMG_SELECT_HTML;
+    sel.value = isVid ? 'grok-720p-6s' : 'gemini-flash';
+}
+
 // ===================== AUTH =====================
 const $loginModal = document.getElementById('login-modal');
 function openLoginModal()  { $loginModal.classList.add('show'); }
@@ -59,6 +106,7 @@ function updateUI(user) {
     document.getElementById('nav-name').innerText = user.name.split(' ')[0];
     document.getElementById('nav-avatar').src = user.picture;
     document.getElementById('nav-credits').innerText = user.credits;
+    const _bar=document.getElementById('nav-credits-bar'); if(_bar) _bar.textContent=user.credits;
     loadHistory();
 }
 
@@ -70,20 +118,15 @@ window.onload = async () => {
         mode = 'video';
         document.getElementById('tab-image').classList.remove('active');
         document.getElementById('tab-video').classList.add('active');
-        document.getElementById('og-img').style.display = 'none';
-        document.getElementById('og-vid').style.display = '';
-        document.getElementById('og-grok').style.display = '';
-        document.getElementById('og-kling').style.display = '';
-        document.getElementById('og-kling-2-6').style.display = '';
-        document.getElementById('og-kling-motion').style.display = '';
-        document.getElementById('og-seedance').style.display = '';
-        updateKlingOptions();
-        document.getElementById('model-sel').value = 'grok-720p-6s';
-        updateModelEtaChip();
         document.getElementById('img-options').classList.add('hidden');
         document.getElementById('vid-options').classList.remove('hidden');
         document.getElementById('refs-section').classList.add('hidden');
+        rebuildModelSelect('video');
+        updateModelEtaChip();
+        updateKlingOptions();
         refreshBadges();
+    } else {
+        rebuildModelSelect('image');
     }
 
     const t = getToken();
@@ -164,16 +207,12 @@ function switchMode(m){
     try { localStorage.setItem('viralio_mode', m); } catch(e) {}
     document.getElementById('tab-image').classList.toggle('active',!isVid);
     document.getElementById('tab-video').classList.toggle('active',isVid);
-    document.getElementById('og-img').style.display = isVid?'none':'';
-    document.getElementById('og-vid').style.display = isVid?'':'none';
-    document.getElementById('og-grok').style.display = isVid?'':'none';
-    document.getElementById('og-kling').style.display = isVid?'':'none';
-    document.getElementById('og-seedance').style.display = isVid?'':'none';
-    document.getElementById('model-sel').value = isVid?'grok-720p-6s':'gemini-flash';
-    updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
     document.getElementById('vid-options').classList.toggle('hidden',!isVid);
     document.getElementById('refs-section').classList.toggle('hidden', isVid);
+    rebuildModelSelect(m);
+    updateModelEtaChip();
+    updateKlingOptions();
     refreshBadges();
     if(getToken()) loadHistory();
 }
@@ -689,7 +728,7 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
         setJobError(jobId, msg);
     } finally {
         activeJobs.delete(jobId);
-        try { const r=await fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+token}}); if(r.ok){ const d=await r.json(); document.getElementById('nav-credits').innerText=d.user.credits; } } catch(e){}
+        try { const r=await fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+token}}); if(r.ok){ const d=await r.json(); document.getElementById('nav-credits').innerText=d.user.credits; const bar=document.getElementById('nav-credits-bar'); if(bar) bar.textContent=d.user.credits; } } catch(e){}
     }
 }
 
@@ -831,8 +870,7 @@ function renderDurationBtns(modelId, m) {
         const style = isActive
             ? 'background:rgba(251,146,60,0.2);border:1.5px solid rgba(251,146,60,0.5);color:rgba(251,196,60,0.95)'
             : 'background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)';
-        const btnCost = m.durCosts ? m.durCosts[d] : (m.crPerSec ? Math.max(1, Math.round(m.crPerSec*d)) : '?');
-        return `<button onclick="selectDuration(${d})" style="padding:5px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;${style}" title="${btnCost} credite">${d}s <span style="font-size:0.55rem;opacity:0.7">${btnCost}cr</span></button>`;
+        return `<button onclick="selectDuration(${d})" style="padding:6px 12px;border-radius:9px;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all 0.18s;${style}">${d}s</button>`;
     }).join('');
 }
 
@@ -949,8 +987,9 @@ function tryRestoreTask() {
     const prevModel = modelSel?.value;
     if (restoredModel && modelSel) {
         // Ensure the option exists before setting
+        // Rebuilt select might not have this model if mode changed — safe check
         const opt = modelSel.querySelector(`option[value="${restoredModel}"]`);
-        if (opt) modelSel.value = restoredModel;
+        if (opt) { modelSel.value = restoredModel; } else { rebuildModelSelect(restoredMode); }
     }
 
     const restoredJobId = ++jobCounter;
