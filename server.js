@@ -215,19 +215,20 @@ const MODEL_PRICES = {
 };
 
 // Kling & Seedance — credite PER SECUNDĂ (total = durata × crPerSec × count)
-// API costs: K3.0 720p=$0.05/s, 1080p=$0.06/s | K2.6 720p=$0.03/s, 1080p=$0.05/s
-//            Motion3.0 720p=$0.05/s, 1080p=$0.08/s | Motion2.6 720p=$0.03/s, 1080p=$0.045/s
-//            Seedance Fast 480p=$0.06/s   (1 cr ~ $0.025, marjă ~50%)
+// Bază: 100 RON = 5000 cr → 1 cr = $0.00435 | Marjă ~30% pe toate modelele
+// API costs: K3.0 720p=$0.05/s 1080p=$0.06/s | K2.6 720p=$0.03/s 1080p=$0.05/s
+//            MotionK3 720p=$0.05/s 1080p=$0.08/s | MotionK2.6 720p=$0.03/s 1080p=$0.045/s
+//            Seedance Fast 480p=$0.06/s
 const KLING_CONFIGS = {
-    'kling-3-0-720p':         { apiModel: 'kling-video-3-0',      kMode: 'standard',     crPerSec: 4,  durRange: [3, 15] },
-    'kling-3-0-1080p':        { apiModel: 'kling-video-3-0',      kMode: 'professional', crPerSec: 5,  durRange: [3, 15] },
-    'kling-2-6-720p':         { apiModel: 'kling-video-2-6',      kMode: 'standard',     crPerSec: 2,  durRange: [5, 10], fixedDurs: [5, 10] },
-    'kling-2-6-1080p':        { apiModel: 'kling-video-2-6',      kMode: 'professional', crPerSec: 4,  durRange: [5, 10], fixedDurs: [5, 10] },
-    'kling-motion-3-720p':    { apiModel: 'kling-video-motion-3', kMode: 'standard',     crPerSec: 4,  durRange: [5, 15], motion: true },
-    'kling-motion-3-1080p':   { apiModel: 'kling-video-motion-3', kMode: 'professional', crPerSec: 7,  durRange: [5, 15], motion: true },
-    'kling-motion-2-6-720p':  { apiModel: 'kling-video-motion',   kMode: 'standard',     crPerSec: 3,  durRange: [5, 15], motion: true },
-    'kling-motion-2-6-1080p': { apiModel: 'kling-video-motion',   kMode: 'professional', crPerSec: 4,  durRange: [5, 15], motion: true },
-    'seedance-fast-480p':     { apiModel: 'bytedance-seedance-2-fast', kMode: 'fast',     crPerSec: 5,  durRange: [4, 15] },
+    'kling-3-0-720p':         { apiModel: 'kling-video-3-0',      kMode: 'standard',     crPerSec: 16,  durRange: [3, 15] },
+    'kling-3-0-1080p':        { apiModel: 'kling-video-3-0',      kMode: 'professional', crPerSec: 20,  durRange: [3, 15] },
+    'kling-2-6-720p':         { apiModel: 'kling-video-2-6',      kMode: 'standard',     crPerSec: 10,  durRange: [5, 10], fixedDurs: [5, 10] },
+    'kling-2-6-1080p':        { apiModel: 'kling-video-2-6',      kMode: 'professional', crPerSec: 16,  durRange: [5, 10], fixedDurs: [5, 10] },
+    'kling-motion-3-720p':    { apiModel: 'kling-video-motion-3', kMode: 'standard',     crPerSec: 16,  durRange: [5, 15], motion: true },
+    'kling-motion-3-1080p':   { apiModel: 'kling-video-motion-3', kMode: 'professional', crPerSec: 26,  durRange: [5, 15], motion: true },
+    'kling-motion-2-6-720p':  { apiModel: 'kling-video-motion',   kMode: 'standard',     crPerSec: 10,  durRange: [5, 15], motion: true },
+    'kling-motion-2-6-1080p': { apiModel: 'kling-video-motion',   kMode: 'professional', crPerSec: 15,  durRange: [5, 15], motion: true },
+    'seedance-fast-480p':     { apiModel: 'bytedance-seedance-2-fast', kMode: 'fast',     crPerSec: 20,  durRange: [4, 15] },
 };
 
 const fetchWithRetry = async (url, options, maxRetries = 6, delayMs = 5000) => {
