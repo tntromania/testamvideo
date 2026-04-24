@@ -45,7 +45,7 @@ const PORT = process.env.PORT || 3001;
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 20 * 1024 * 1024, files: 5 }
+    limits: { fileSize: 100 * 1024 * 1024, files: 6 }
 });
 
 app.use(cors({ origin: '*' }));
@@ -212,10 +212,22 @@ const MODEL_PRICES = {
     'veo-extend': 2,
     'grok-720p-6s': 2, 'grok-720p-10s': 2,
     'grok-extend': 2,
-    // Kling AI — preț per generare 5s, marjă ~70%
-    'kling-2-5-relax-5s': 10,  // $0.075 cost API
-    'kling-2-6-5s': 20,         // $0.15 cost API
-    'kling-3-0-5s': 34,         // $0.25 cost API
+};
+
+// Kling & Seedance — credite PER SECUNDĂ (total = durata × crPerSec × count)
+// API costs: K3.0 720p=$0.05/s, 1080p=$0.06/s | K2.6 720p=$0.03/s, 1080p=$0.05/s
+//            Motion3.0 720p=$0.05/s, 1080p=$0.08/s | Motion2.6 720p=$0.03/s, 1080p=$0.045/s
+//            Seedance Fast 480p=$0.06/s   (1 cr ~ $0.025, marjă ~50%)
+const KLING_CONFIGS = {
+    'kling-3-0-720p':         { apiModel: 'kling-video-3-0',      kMode: 'standard',     crPerSec: 4,  durRange: [3, 15] },
+    'kling-3-0-1080p':        { apiModel: 'kling-video-3-0',      kMode: 'professional', crPerSec: 5,  durRange: [3, 15] },
+    'kling-2-6-720p':         { apiModel: 'kling-video-2-6',      kMode: 'standard',     crPerSec: 2,  durRange: [5, 10], fixedDurs: [5, 10] },
+    'kling-2-6-1080p':        { apiModel: 'kling-video-2-6',      kMode: 'professional', crPerSec: 4,  durRange: [5, 10], fixedDurs: [5, 10] },
+    'kling-motion-3-720p':    { apiModel: 'kling-video-motion-3', kMode: 'standard',     crPerSec: 4,  durRange: [5, 15], motion: true },
+    'kling-motion-3-1080p':   { apiModel: 'kling-video-motion-3', kMode: 'professional', crPerSec: 7,  durRange: [5, 15], motion: true },
+    'kling-motion-2-6-720p':  { apiModel: 'kling-video-motion',   kMode: 'standard',     crPerSec: 3,  durRange: [5, 15], motion: true },
+    'kling-motion-2-6-1080p': { apiModel: 'kling-video-motion',   kMode: 'professional', crPerSec: 4,  durRange: [5, 15], motion: true },
+    'seedance-fast-480p':     { apiModel: 'bytedance-seedance-2-fast', kMode: 'fast',     crPerSec: 5,  durRange: [4, 15] },
 };
 
 const fetchWithRetry = async (url, options, maxRetries = 6, delayMs = 5000) => {
@@ -480,6 +492,12 @@ const mapVideoError = (msg) => {
     if (msg.includes('AUDIO_FILTERED')) return '🚫 Audio-ul a fost filtrat (conținut inadecvat în replici/sunet). Modifică promptul sau elimină replicile.';
     if (msg.includes('TIMED_OUT') || msg.includes('TIMEOUT') || msg.includes('timeout'))
         return 'Generarea a durat prea mult. Reîncearcă.';
+    if (msg.includes('INVALID_VIDEO_FILE') || msg.includes('requires at least one reference video'))
+        return '🚫 Modelul de Motion Control necesită un videoclip de referință. Încarcă un video în secțiunea "Video Referință".';
+    if (msg.includes('NOT_ENOUGH_CREDIT') || msg.includes('PREMIUM_PLAN_REQUIRED'))
+        return '⚠️ Cont GeminiGen fără credite sau plan insuficient. Contactează administratorul.';
+    if (msg.includes('SERVICE_PRICE_NOT_FOUND') || msg.includes('EMPTY_PROMPT'))
+        return '⚠️ Combinație model/durată invalidă. Reîncearcă cu alt prompt sau durată.';
     if (msg.includes('quota') || msg.includes('QUOTA') || msg.includes('rate limit') || msg.includes('RATE_LIMIT') || msg.includes('insufficient') || msg.includes('balance') || msg.includes('credit'))
         return `⚠️ Capacitatea serverelor AI atinsă. Contactează ${DISCORD_CONTACT}`;
     if (msg.includes('Create video error') || msg.includes('Create video failed'))
@@ -566,7 +584,8 @@ app.post('/api/media/video',
     upload.fields([
         { name: 'start_image', maxCount: 1 },
         { name: 'end_image',   maxCount: 1 },
-        { name: 'ref_images',  maxCount: 5 }
+        { name: 'ref_images',  maxCount: 5 },
+        { name: 'ref_video',   maxCount: 1 },
     ]),
     async (req, res) => {
         const startTime = Date.now();
@@ -607,7 +626,12 @@ app.post('/api/media/video',
             const { prompt, aspect_ratio, number_of_videos, model_id } = req.body;
             let finalPrompt = prompt;
             const count = parseInt(number_of_videos) || 1;
-            const costPerVid = MODEL_PRICES[model_id] || 2;
+            // Per-second cost pentru Kling/Seedance, flat pentru Grok/Veo
+            const klingCfg = KLING_CONFIGS[model_id];
+            const reqDuration = parseInt(req.body.duration) || 5;
+            const costPerVid = klingCfg
+                ? klingCfg.crPerSec * reqDuration
+                : (MODEL_PRICES[model_id] || 2);
             const totalCost = count * costPerVid;
 
             const GEMINIGEN_API_KEY = process.env.GEMINIGEN_API_KEY;
@@ -622,6 +646,7 @@ app.post('/api/media/video',
             const startImageFile = req.files?.['start_image']?.[0] || null;
             const endImageFile   = req.files?.['end_image']?.[0]   || null;
             const refImages      = req.files?.['ref_images']        || [];
+            const refVideoFile   = req.files?.['ref_video']?.[0]   || null;
 
             // Validare imagini
             if (startImageFile) {
@@ -638,7 +663,7 @@ app.post('/api/media/video',
             const isGrokExtend = model_id === 'grok-extend';
             const isVeoExtend = model_id === 'veo-extend';
             const isVeo = model_id.startsWith('veo') && !isVeoExtend;
-            const isKling = model_id.startsWith('kling-');
+            const isKling = model_id.startsWith('kling-') || model_id === 'seedance-fast-480p';
 
             // ─── Determină endpoint și parametri ─────────────────────────
             let apiEndpoint, apiModel, resolution, duration, grokAspect, klingMode;
@@ -661,17 +686,23 @@ app.post('/api/media/video',
                 resolution = '1080p';
                 duration = 8;
                 grokAspect = toGeminiGenAspect(aspect_ratio, false);
-            } else if (isKling) {
+            } else if (klingCfg && model_id !== 'seedance-fast-480p') {
+                // Kling AI
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/kling';
-                if (model_id === 'kling-2-5-relax-5s') {
-                    apiModel = 'kling-video-2-5'; klingMode = 'relax';
-                } else if (model_id === 'kling-2-6-5s') {
-                    apiModel = 'kling-video-2-6'; klingMode = 'standard';
-                } else {
-                    apiModel = 'kling-video-3-0'; klingMode = 'standard';
-                }
-                resolution = '720p'; // informativ
-                duration = 5;
+                apiModel = klingCfg.apiModel;
+                klingMode = klingCfg.kMode;
+                // Kling 2.6: only 5s or 10s; others: 3-15s
+                const validDurs = klingCfg.fixedDurs || null;
+                duration = validDurs
+                    ? (reqDuration <= 7 ? 5 : 10)
+                    : Math.min(Math.max(reqDuration, klingCfg.durRange[0]), klingCfg.durRange[1]);
+                grokAspect = toKlingAspect(aspect_ratio);
+            } else if (model_id === 'seedance-fast-480p') {
+                // Bytedance Seedance
+                apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/seedance';
+                apiModel = 'bytedance-seedance-2-fast';
+                klingMode = null;
+                duration = Math.min(Math.max(reqDuration, 4), 15);
                 grokAspect = toKlingAspect(aspect_ratio);
             } else {
                 // Veo 3.1 Fast
@@ -688,7 +719,8 @@ app.post('/api/media/video',
                 return sendError('Pentru Extend trebuie să selectezi un videoclip existent (ref_history UUID).');
             }
 
-            console.log(`[Video] START | model=${model_id} → api=${apiModel} res=${resolution} dur=${duration}s count=${count} cost=${totalCost} | ${emailTag}`);
+            const durLabel = klingCfg ? `${reqDuration}s(eff:${duration}s)` : `${duration}s`;
+console.log(`[Video] START | model=${model_id} → api=${apiModel} res=${resolution || 'n/a'} dur=${durLabel} count=${count} cost=${totalCost} | ${emailTag}`);
             sendStatus('Se trimite cererea video...');
 
             // ─── Trimitem cererile paralel (count videoclipuri) ─────────
@@ -715,22 +747,46 @@ app.post('/api/media/video',
                     } else {
                         // ── Generare normală ──────────────────────────────
                         formData.append('model', apiModel);
-                        if (!isKling) {
+                        if (!klingCfg) {
                             formData.append('resolution', resolution);
                         }
 
-                        if (isKling) {
-                            // ── Kling AI: mode, aspect_ratio, duration, ref_images opționale ──
-                            formData.append('mode', klingMode);
+                        if (model_id === 'seedance-fast-480p') {
+                            // ── Seedance: aspect_ratio, duration, opțional ref_images ──
                             formData.append('aspect_ratio', grokAspect);
                             formData.append('duration', String(duration));
+                            if (startImageFile) {
+                                const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'kling');
+                                const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                formData.append('ref_images', blob, 'ref_start.jpg');
+                            }
+                            if (!startImageFile) {
+                                for (const ref of refImages.slice(0, 3)) {
+                                    const compressed = await compressForVideo(ref.buffer, ref.mimetype, 'kling');
+                                    const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                    formData.append('ref_images', blob, 'ref.jpg');
+                                }
+                            }
+                        } else if (klingCfg) {
+                            // ── Kling AI ──
+                            if (klingMode) formData.append('mode', klingMode);
+                            formData.append('aspect_ratio', grokAspect);
+                            formData.append('duration', String(duration));
+                            // Motion control: trimitem video de referință obligatoriu
+                            if (klingCfg.motion && refVideoFile) {
+                                const blob = new Blob([refVideoFile.buffer], { type: refVideoFile.mimetype });
+                                formData.append('ref_videos', blob, refVideoFile.originalname || 'ref_motion.mp4');
+                                console.log(`[Kling] Motion ref_video: ${refVideoFile.size || refVideoFile.buffer.length} bytes`);
+                            } else if (klingCfg.motion && !refVideoFile) {
+                                console.warn(`[Kling] Motion model fără ref_video! UUID va eșua.`);
+                            }
+                            // Imagini de referință (max 4 pentru Kling)
                             const klingRefs = refImages.slice(0, 4);
                             for (const ref of klingRefs) {
                                 const compressed = await compressForVideo(ref.buffer, ref.mimetype, 'kling');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
                                 formData.append('ref_images', blob, 'ref.jpg');
                             }
-                            // Imagine start ca referință stilistică dacă e disponibilă
                             if (startImageFile && klingRefs.length < 4) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'kling');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
@@ -745,7 +801,7 @@ app.post('/api/media/video',
 
                         // Grok: fișiere în 'files' | Veo: fișiere în 'ref_images' | Kling: deja tratat mai sus
                         const compressModel = isGrok ? 'grok' : 'veo';
-                        if (!isKling && isGrok) {
+                        if (!klingCfg && isGrok) {
                             if (startImageFile) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'grok');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
@@ -763,7 +819,7 @@ app.post('/api/media/video',
                                     formData.append('files', blob, `ref.jpg`);
                                 }
                             }
-                        } else if (!isKling) {
+                        } else if (!klingCfg) {
                             // Veo: fișiere în 'ref_images'
                             if (startImageFile) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'veo');
