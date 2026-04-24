@@ -212,6 +212,7 @@ const MODEL_PRICES = {
     'veo-extend': 2,
     'grok-720p-6s': 2, 'grok-720p-10s': 2,
     'grok-extend': 2,
+    'grok-storyboard': 2,  // per scenă (multiplicat cu nr_scene)
 };
 
 // ══ Viralio Credit Pricing ══════════════════════════════════════════
@@ -998,6 +999,211 @@ console.log(`[Video] START | model=${model_id} → api=${apiModel} res=${resolut
 
         } catch (e) {
             console.error(`[Video] ❌ Eroare neașteptată: ${e.message}`);
+            sendError(e.message);
+        }
+    }
+);
+
+// ══════════════════════════════════════════════════════════════
+// ██ VIDEO STORYBOARD — Grok multi-scenă
+// ══════════════════════════════════════════════════════════════
+const STORYBOARD_CONFIG = {
+    minScenes: 2,
+    maxScenes: 10,
+    maxTotalSec: 45,
+    allowedDurations: [6, 10],
+    costPerScene: 2,
+};
+
+app.post('/api/media/video-storyboard',
+    authenticate,
+    upload.fields([
+        { name: 'first_image', maxCount: 1 },
+    ]),
+    async (req, res) => {
+        const startTime = Date.now();
+        const elapsed = () => `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
+
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        let clientAborted = false;
+        res.on('close', () => { if (!res.writableEnded) clientAborted = true; });
+
+        const keepAliveInterval = setInterval(() => {
+            if (!res.writableEnded && !clientAborted) res.write(': keep-alive\n\n');
+            else clearInterval(keepAliveInterval);
+        }, 20000);
+        const clearKeepAlive = () => clearInterval(keepAliveInterval);
+
+        const sendStatus = (status) => { if (!res.writableEnded && !clientAborted) res.write(`data: ${JSON.stringify({ status })}\n\n`); };
+        const sendDone = (urls, uuids) => {
+            clearKeepAlive();
+            if (!res.writableEnded && !clientAborted) {
+                res.write(`data: ${JSON.stringify({ file_urls: urls, file_uuids: uuids || [], saved_to_history: true })}\n\n`);
+                res.write('data: [DONE]\n\n'); res.end();
+            }
+        };
+        const sendError = (msg) => {
+            clearKeepAlive();
+            if (!res.writableEnded && !clientAborted) {
+                res.write(`data: ${JSON.stringify({ error: mapVideoError(msg) })}\n\n`);
+                res.write('data: [DONE]\n\n'); res.end();
+            }
+        };
+
+        try {
+            const { aspect_ratio } = req.body;
+            const emailTag = req.user.email;
+
+            // ── Parse + validate scenes ────────────────────────────────
+            let scenes;
+            try {
+                scenes = JSON.parse(req.body.scenes || '[]');
+            } catch (e) {
+                return sendError('Lista de scene nu e JSON valid.');
+            }
+            if (!Array.isArray(scenes)) return sendError('Lista de scene nu e array.');
+            if (scenes.length < STORYBOARD_CONFIG.minScenes) return sendError(`Minim ${STORYBOARD_CONFIG.minScenes} scene necesare.`);
+            if (scenes.length > STORYBOARD_CONFIG.maxScenes) return sendError(`Maxim ${STORYBOARD_CONFIG.maxScenes} scene.`);
+
+            let totalDur = 0;
+            for (let i = 0; i < scenes.length; i++) {
+                const s = scenes[i];
+                if (!s || typeof s.prompt !== 'string' || !s.prompt.trim()) {
+                    return sendError(`Scena ${i+1} nu are prompt.`);
+                }
+                if (!STORYBOARD_CONFIG.allowedDurations.includes(Number(s.duration))) {
+                    return sendError(`Scena ${i+1}: durata trebuie să fie 6 sau 10 secunde.`);
+                }
+                totalDur += Number(s.duration);
+            }
+            if (totalDur > STORYBOARD_CONFIG.maxTotalSec) {
+                return sendError(`Durată totală (${totalDur}s) depășește limita de ${STORYBOARD_CONFIG.maxTotalSec}s.`);
+            }
+
+            // Normalizăm: API-ul obligă mode='custom'
+            const cleanScenes = scenes.map(s => ({
+                prompt: String(s.prompt).trim(),
+                duration: Number(s.duration),
+                mode: 'custom',
+            }));
+
+            // ── Cost ──────────────────────────────────────────────────
+            const totalCost = cleanScenes.length * STORYBOARD_CONFIG.costPerScene;
+            const GEMINIGEN_API_KEY = process.env.GEMINIGEN_API_KEY;
+            if (!GEMINIGEN_API_KEY) return sendError('Cheia API GeminiGen nu este configurată. Contactează administratorul.');
+
+            const balance = await hubAPI.checkCredits(req.userId);
+            if (balance.credits < totalCost) return sendError(`Fonduri insuficiente! Ai nevoie de ${totalCost} credite.`);
+
+            // ── Imagine opțională pentru prima scenă (test 1b, undocumented) ──
+            const firstImageFile = req.files?.['first_image']?.[0] || null;
+            if (firstImageFile) {
+                const v = await validateImageForVideo(firstImageFile.buffer, firstImageFile.mimetype, 'first_image');
+                if (!v.valid) return sendError(`Imaginea de start are probleme: ${v.reason}. Folosește o imagine JPEG/PNG ≥128x128px.`);
+            }
+
+            const ratio = toGeminiGenAspect(aspect_ratio, true);
+            console.log(`[Storyboard] START | scene=${cleanScenes.length} totalDur=${totalDur}s ratio=${ratio} cost=${totalCost} | ${emailTag}`);
+            sendStatus(`Se trimite storyboard cu ${cleanScenes.length} scene...`);
+
+            // ── Build multipart form data ─────────────────────────────
+            const formData = new FormData();
+            formData.append('scenes', JSON.stringify(cleanScenes));
+            formData.append('aspect_ratio', ratio);
+            formData.append('resolution', '720p');
+            formData.append('model', 'grok-video');
+            if (firstImageFile) {
+                // API-ul nu documentează un câmp pentru imagine — încercăm câmpurile uzuale
+                // (dacă API-ul îl acceptă, cu atât mai bine; dacă nu, storyboard-ul merge fără)
+                try {
+                    const compressed = await compressForVideo(firstImageFile.buffer, firstImageFile.mimetype, 'grok');
+                    const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                    formData.append('files', blob, 'first_frame.jpg');
+                    formData.append('first_image', blob, 'first_frame.jpg');
+                } catch (imgErr) {
+                    console.warn(`[Storyboard] ⚠️ Nu am putut atașa imaginea: ${imgErr.message}`);
+                }
+            }
+
+            // ── POST la endpoint ──────────────────────────────────────
+            const apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-storyboard/grok';
+            console.log(`[Storyboard] POST → ${apiEndpoint} | ${emailTag}`);
+
+            const postRes = await fetchWithRetry(apiEndpoint, {
+                method: 'POST',
+                headers: { 'x-api-key': GEMINIGEN_API_KEY },
+                body: formData
+            }, 3, 5000);
+
+            const postText = await postRes.text();
+            let postData;
+            try { postData = JSON.parse(postText); }
+            catch { return sendError(`Răspuns invalid de la server: ${postText.substring(0, 200)}`); }
+
+            console.log(`[Storyboard] POST status=${postRes.status} uuid=${postData.uuid || 'N/A'} | ${emailTag}`);
+
+            if (!postRes.ok) {
+                const errMsg = postData.error || postData.message || postData.detail || `HTTP ${postRes.status}`;
+                return sendError(errMsg);
+            }
+
+            const uuid = postData.uuid;
+            if (!uuid) return sendError('Niciun UUID în răspunsul serverului.');
+
+            sendStatus(`Se generează storyboard-ul (${cleanScenes.length} scene · ${totalDur}s)...`);
+
+            // ── Polling (storyboard-ul poate dura mai mult: ~45 × 90s = timeout mai lung) ──
+            const result = await pollGeminiGenResult(uuid, GEMINIGEN_API_KEY, emailTag, 150, 4000);
+
+            if (!result.success) {
+                console.error(`[Storyboard] ❌ ${result.error} | ${emailTag}`);
+                return sendError(result.error);
+            }
+
+            // ── Upload pe R2 ──────────────────────────────────────────
+            let finalUrl = result.url;
+            try {
+                sendStatus('Se salvează storyboard-ul...');
+                const videoFetch = await fetch(result.url, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ViralioBOT/1.0)' }
+                });
+                if (videoFetch.ok) {
+                    const videoBuffer = Buffer.from(await videoFetch.arrayBuffer());
+                    const fileName = `videos/${req.userId}_${Date.now()}_storyboard_${Math.random().toString(36).substring(7)}.mp4`;
+                    finalUrl = await uploadToR2(videoBuffer, fileName, 'video/mp4');
+                    console.log(`[Storyboard] ✅ R2 upload: ${finalUrl} | ${emailTag}`);
+                } else {
+                    console.warn(`[Storyboard] ⚠️ R2 download eșuat, folosesc URL original | ${emailTag}`);
+                }
+            } catch (uploadErr) {
+                console.warn(`[Storyboard] ⚠️ R2 upload eșuat, folosesc URL original: ${uploadErr.message} | ${emailTag}`);
+            }
+
+            // ── Scade credite + salvează istoric ──────────────────────
+            await Log.create({ userEmail: req.user.email, type: 'video', count: 1, cost: totalCost }).catch(() => {});
+            try { await hubAPI.useCredits(req.userId, totalCost); }
+            catch (e) { console.error('Eroare scădere credite storyboard:', e.message); }
+
+            const storyboardLabel = `🎬 Storyboard (${cleanScenes.length} scene) — ${cleanScenes[0].prompt.substring(0, 100)}`;
+            try {
+                await History.create({
+                    userId: req.userId, type: 'video',
+                    originalUrl: finalUrl, supabaseUrl: finalUrl,
+                    prompt: storyboardLabel,
+                    uuid: uuid || null,
+                });
+                console.log(`[Storyboard] 📝 Istoric salvat server-side`);
+            } catch (histErr) { console.error('[Storyboard] ⚠️ Eroare istoric:', histErr.message); }
+
+            if (clientAborted) { clearKeepAlive(); return; }
+
+            console.log(`[Storyboard] ✅ Gata în ${elapsed()} | -${totalCost} cr | ${emailTag}`);
+            return sendDone([finalUrl], [uuid]);
+
+        } catch (e) {
+            console.error(`[Storyboard] ❌ Eroare neașteptată: ${e.message}`);
             sendError(e.message);
         }
     }
