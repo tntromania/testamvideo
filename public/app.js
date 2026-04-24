@@ -7,6 +7,7 @@ const MODEL_META = {
     'grok-720p-6s': { type:'video', cost:2 },
     'grok-720p-10s':{ type:'video', cost:2 },
     'grok-extend':  { type:'video', cost:2 },
+    'grok-storyboard': { type:'video', storyboard:true, costPerScene:2 },
     // ── Kling 3.0 per-second (1.2/1.5 cr/s) ────────────────────────
     'kling-3-0-720p':          { type:'video', crPerSec: 1.2, durRange:[3,15] },
     'kling-3-0-1080p':         { type:'video', crPerSec: 1.5, durRange:[3,15] },
@@ -36,6 +37,11 @@ let activeJobs = new Map();
 let jobCounter = 0;
 let lbMediaList = [], lbCurrentIndex = 0, lbCurrentType = 'image';
 
+// ── STORYBOARD STATE ──
+let storyboardScenes = [];          // [{prompt, duration}]
+let _editingSceneIdx = -1;          // -1 = add new, >=0 = editing existing
+let _storyboardFirstImageFile = null; // optional first-scene reference (option 1b)
+
 
 // ═══════════════════════════════════════════════════════════════
 // MODEL SELECT — rebuild per mod (fix: optgroup display:none nu
@@ -54,6 +60,7 @@ const VID_SELECT_HTML = `
 <optgroup label="Video · Grok 3">
   <option value="grok-720p-6s">Grok 3 · 6s</option>
   <option value="grok-720p-10s">Grok 3 · 10s</option>
+  <option value="grok-storyboard">🎬 Grok Storyboard · NOU ✨</option>
 </optgroup>
 <optgroup label="Kling 3.0">
   <option value="kling-3-0-720p">Kling 3.0 · 720p</option>
@@ -138,6 +145,7 @@ window.onload = async () => {
         } catch(e){}
     }
     refreshBadges();
+    updateStoryboardUI();
     if(t) { tryRestoreTask(); }
 };
 
@@ -171,7 +179,10 @@ function refreshBadges(){
     const n = mode==='image'?imgCount:vidCount;
     let cost;
     const isPremium2 = m.crPerSec !== undefined || m.durCosts !== undefined || m.flatCost !== undefined;
-    if (isPremium2) {
+    if (m.storyboard) {
+        // Cost = nr_scene × costPerScene (indep de vidCount)
+        cost = storyboardScenes.length * (m.costPerScene || 2);
+    } else if (isPremium2) {
         cost = computeKlingCost(m, vidDuration) * n;
     } else {
         cost = (m.cost || 2) * n;
@@ -179,13 +190,16 @@ function refreshBadges(){
     document.getElementById('total-cost').textContent = cost;
 }
 
-function onModelChange(){ refreshBadges(); updateModelEtaChip(); updateKlingOptions(); }
+function onModelChange(){ refreshBadges(); updateModelEtaChip(); updateKlingOptions(); updateStoryboardUI(); }
 
 function updateModelEtaChip(){
     const chip = document.getElementById('model-eta-chip');
     if(!chip) return;
     const modelId = document.getElementById('model-sel')?.value || '';
-    if(modelId.startsWith('grok-')){
+    if(modelId === 'grok-storyboard'){
+        chip.style.display = 'flex';
+        chip.innerHTML = `<div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:10px;background:linear-gradient(135deg,rgba(236,72,153,0.12),rgba(99,102,241,0.12));border:1px solid rgba(236,72,153,0.3);width:100%;box-sizing:border-box"><span style="font-size:1rem">🎬</span><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:0.72rem;font-weight:800;background:linear-gradient(135deg,#f472b6,#a5a8ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:0.02em">Multi-scenă · chain</span><span style="font-size:0.54rem;font-weight:900;padding:2px 6px;border-radius:5px;background:linear-gradient(135deg,#ec4899,#8b5cf6);color:white;letter-spacing:0.09em;box-shadow:0 2px 6px rgba(236,72,153,0.35)">NOU</span></div><span style="font-size:0.62rem;color:rgba(255,255,255,0.4);font-weight:600;display:block;margin-top:1px">Până la 10 scene · 2 credite/scenă</span></div></div>`;
+    } else if(modelId.startsWith('grok-')){
         chip.style.display = 'flex';
         chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(99,211,140,0.08);border:1px solid rgba(99,211,140,0.2);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">${modelId==='grok-extend'?'🔗':'⚡'}</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(99,211,140,0.9);letter-spacing:0.02em">~40 secunde</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${modelId==='grok-extend'?'Grok Extend · continuă video':'procesare rapidă'}</span></div></div>`;
     } else if(modelId.startsWith('veo')){
@@ -214,6 +228,7 @@ function switchMode(m){
     rebuildModelSelect(m);
     updateModelEtaChip();
     updateKlingOptions();
+    updateStoryboardUI();
     refreshBadges();
     if(getToken()) loadHistory();
 }
@@ -825,6 +840,7 @@ async function submitExtend() {
 }
 
 document.addEventListener('keydown', e => { if(e.key==='Escape' && document.getElementById('extend-modal').style.display==='flex') closeExtendModal(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape' && document.getElementById('scene-modal')?.style.display==='flex') closeSceneModal(); });
 
 // ===================== KLING/SEEDANCE OPTIONS =====================
 function updateKlingOptions() {
@@ -944,15 +960,252 @@ function removeMotionImage() {
     document.getElementById('motion-image-preview').style.display = 'none';
 }
 
+// ═══════════════════════════════════════════════════════════════
+// STORYBOARD — multi-scenă (Grok)
+// ═══════════════════════════════════════════════════════════════
+const STORYBOARD_MAX_SCENES = 10;
+const STORYBOARD_MIN_SCENES = 2;
+const STORYBOARD_MAX_TOTAL_SEC = 45;
+
+function isStoryboardActive() {
+    const modelId = document.getElementById('model-sel')?.value || '';
+    return modelId === 'grok-storyboard';
+}
+
+function updateStoryboardUI() {
+    const active = isStoryboardActive();
+    const panel = document.getElementById('storyboard-panel');
+    const promptPanel = document.getElementById('prompt-panel');
+    const vcountPanel = document.getElementById('vcount-panel');
+    const framesSection = document.querySelector('.frames-section');
+    const durSection = document.getElementById('kling-dur-section');
+    const motionSection = document.getElementById('kling-motion-section');
+    const motionImgSection = document.getElementById('kling-motion-image-section');
+
+    if (panel) panel.style.display = active ? '' : 'none';
+    if (promptPanel) promptPanel.style.display = active ? 'none' : '';
+    if (vcountPanel) vcountPanel.style.display = active ? 'none' : '';
+    if (active) {
+        // Ascundem restul secțiunilor video specifice
+        if (framesSection) framesSection.style.display = 'none';
+        if (durSection) durSection.style.display = 'none';
+        if (motionSection) motionSection.style.display = 'none';
+        if (motionImgSection) motionImgSection.style.display = 'none';
+        renderScenesTable();
+    }
+    refreshBadges();
+}
+
+function renderScenesTable() {
+    const tbody = document.getElementById('scenes-tbody');
+    const emptyEl = document.getElementById('scenes-empty');
+    const counter = document.getElementById('scenes-counter');
+    const totalDurEl = document.getElementById('scenes-total-dur');
+    const genBtn = document.getElementById('gen-btn');
+    if (!tbody) return;
+
+    const totalDur = storyboardScenes.reduce((s, x) => s + (x.duration||0), 0);
+
+    if (counter) counter.textContent = `${storyboardScenes.length} scen${storyboardScenes.length === 1 ? 'ă' : 'e'}`;
+    if (totalDurEl) {
+        const overLimit = totalDur > STORYBOARD_MAX_TOTAL_SEC;
+        totalDurEl.textContent = `${totalDur}s / ${STORYBOARD_MAX_TOTAL_SEC}s`;
+        totalDurEl.style.color = overLimit ? 'rgba(248,113,113,0.9)' : (totalDur >= STORYBOARD_MAX_TOTAL_SEC - 6 ? 'rgba(251,196,60,0.9)' : 'rgba(165,168,255,0.7)');
+    }
+
+    if (storyboardScenes.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = '';
+    } else {
+        if (emptyEl) emptyEl.style.display = 'none';
+        tbody.innerHTML = storyboardScenes.map((s, i) => {
+            const isFirst = i === 0;
+            const hasImg = isFirst && _storyboardFirstImageFile;
+            return `
+                <tr class="scene-row">
+                    <td class="scene-num"><span class="scene-badge">${i+1}</span></td>
+                    <td class="scene-prompt"><div class="scene-prompt-text">${escHtml(s.prompt)}</div>${hasImg ? '<div class="scene-img-chip"><i class="fa-solid fa-image"></i> imagine start</div>' : ''}</td>
+                    <td class="scene-dur"><span class="dur-pill">${s.duration}s</span></td>
+                    <td class="scene-mode"><span class="mode-pill">Custom</span></td>
+                    <td class="scene-actions">
+                        <button onclick="editScene(${i})" class="scene-btn" title="Editează"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="removeScene(${i})" class="scene-btn scene-btn-danger" title="Șterge"><i class="fa-solid fa-trash"></i></button>
+                    </td>
+                </tr>`;
+        }).join('');
+    }
+
+    // Actualizăm butonul Generate
+    if (genBtn) {
+        const validCount = storyboardScenes.length >= STORYBOARD_MIN_SCENES && storyboardScenes.length <= STORYBOARD_MAX_SCENES;
+        const validDur = totalDur <= STORYBOARD_MAX_TOTAL_SEC && totalDur > 0;
+        genBtn.disabled = !(validCount && validDur);
+        genBtn.style.opacity = genBtn.disabled ? '0.5' : '';
+        genBtn.style.cursor = genBtn.disabled ? 'not-allowed' : '';
+    }
+}
+
+function openSceneModal(editIdx) {
+    _editingSceneIdx = (typeof editIdx === 'number') ? editIdx : -1;
+    const modal = document.getElementById('scene-modal');
+    const title = document.getElementById('scene-modal-title');
+    const promptEl = document.getElementById('scene-prompt');
+    const totalDur = storyboardScenes.reduce((s, x) => s + (x.duration||0), 0);
+
+    if (_editingSceneIdx >= 0) {
+        const s = storyboardScenes[_editingSceneIdx];
+        if (title) title.textContent = `Editează scena ${_editingSceneIdx + 1}`;
+        if (promptEl) promptEl.value = s.prompt || '';
+        selectSceneDuration(s.duration || 6);
+    } else {
+        // Add new
+        if (storyboardScenes.length >= STORYBOARD_MAX_SCENES) {
+            toast(`Maxim ${STORYBOARD_MAX_SCENES} scene.`);
+            return;
+        }
+        if (title) title.textContent = `Adaugă scena ${storyboardScenes.length + 1}`;
+        if (promptEl) promptEl.value = '';
+        // Alegem automat durata care mai încape (6s dacă încape, altfel niciuna)
+        const remainingSec = STORYBOARD_MAX_TOTAL_SEC - totalDur;
+        selectSceneDuration(remainingSec >= 10 ? 6 : (remainingSec >= 6 ? 6 : 6));
+    }
+    updateSceneImageUI();
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+    setTimeout(() => { try { promptEl?.focus(); } catch(e){} }, 200);
+}
+
+function closeSceneModal(e) {
+    if (e && e.target !== document.getElementById('scene-modal') && e.type !== 'click') return;
+    const modal = document.getElementById('scene-modal');
+    modal.style.opacity = '0';
+    setTimeout(() => { modal.style.display = 'none'; }, 250);
+    _editingSceneIdx = -1;
+}
+
+let _sceneModalDuration = 6;
+function selectSceneDuration(d) {
+    _sceneModalDuration = d;
+    const b6 = document.getElementById('scene-dur-6');
+    const b10 = document.getElementById('scene-dur-10');
+    if (!b6 || !b10) return;
+    const active = 'background:rgba(236,72,153,0.15);border:1.5px solid rgba(236,72,153,0.5);color:rgba(244,114,182,0.95)';
+    const inactive = 'background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)';
+    b6.style.cssText = `flex:1;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;transition:all 0.2s;${d===6?active:inactive}`;
+    b10.style.cssText = `flex:1;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;transition:all 0.2s;${d===10?active:inactive}`;
+}
+
+function updateSceneImageUI() {
+    // Image reference vizibilă doar pentru prima scenă (add cu 0 scene existente, sau edit idx=0)
+    const section = document.getElementById('scene-image-section');
+    if (!section) return;
+    const isFirst = (_editingSceneIdx === 0) || (_editingSceneIdx === -1 && storyboardScenes.length === 0);
+    section.style.display = isFirst ? '' : 'none';
+    if (isFirst) {
+        const zone = document.getElementById('scene-image-zone');
+        const preview = document.getElementById('scene-image-preview');
+        const nameEl = document.getElementById('scene-image-name');
+        if (_storyboardFirstImageFile) {
+            if (zone) zone.style.display = 'none';
+            if (preview) preview.style.display = 'flex';
+            if (nameEl) nameEl.textContent = _storyboardFirstImageFile.name;
+        } else {
+            if (zone) zone.style.display = '';
+            if (preview) preview.style.display = 'none';
+        }
+    }
+}
+
+function handleSceneImageSelect(e) {
+    const file = e.target.files[0]; if (!file) return;
+    _storyboardFirstImageFile = file;
+    updateSceneImageUI();
+    e.target.value = '';
+}
+
+function removeSceneImage() {
+    _storyboardFirstImageFile = null;
+    updateSceneImageUI();
+}
+
+function saveScene() {
+    const promptEl = document.getElementById('scene-prompt');
+    const prompt = (promptEl?.value || '').trim();
+    if (!prompt) { toast('Scrie un prompt pentru scenă.'); try { promptEl?.focus(); } catch(e){} return; }
+    if (prompt.length > 800) { toast('Promptul scenei e prea lung (max 800 caractere).'); return; }
+    const duration = _sceneModalDuration === 10 ? 10 : 6;
+
+    // Verificare buget total
+    const currentTotal = storyboardScenes.reduce((s, x, i) => s + (i === _editingSceneIdx ? 0 : x.duration), 0);
+    if (currentTotal + duration > STORYBOARD_MAX_TOTAL_SEC) {
+        toast(`Durată totală ar depăși ${STORYBOARD_MAX_TOTAL_SEC}s (actual ${currentTotal}s + ${duration}s).`);
+        return;
+    }
+
+    if (_editingSceneIdx >= 0) {
+        storyboardScenes[_editingSceneIdx] = { prompt, duration };
+    } else {
+        if (storyboardScenes.length >= STORYBOARD_MAX_SCENES) { toast(`Maxim ${STORYBOARD_MAX_SCENES} scene.`); return; }
+        storyboardScenes.push({ prompt, duration });
+    }
+    closeSceneModal();
+    renderScenesTable();
+    refreshBadges();
+}
+
+function editScene(idx) { openSceneModal(idx); }
+
+function removeScene(idx) {
+    storyboardScenes.splice(idx, 1);
+    // Dacă a fost scoasă prima scenă și există imagine globală, o păstrăm pentru noua primă scenă (sau o lăsăm)
+    if (storyboardScenes.length === 0) _storyboardFirstImageFile = null;
+    renderScenesTable();
+    refreshBadges();
+}
+
+function clearAllScenes() {
+    if (storyboardScenes.length === 0) return;
+    if (!confirm('Ștergi toate scenele?')) return;
+    storyboardScenes = [];
+    _storyboardFirstImageFile = null;
+    renderScenesTable();
+    refreshBadges();
+}
+
 // ===================== GENERATE =====================
 async function generate(){
     const token=getToken(); if(!token){ openLoginModal(); return; }
+    const _activeModelId = document.getElementById('model-sel')?.value || '';
+
+    // ── Storyboard branch ──
+    if (_activeModelId === 'grok-storyboard') {
+        if (storyboardScenes.length < STORYBOARD_MIN_SCENES) { toast(`Minim ${STORYBOARD_MIN_SCENES} scene necesare.`); return; }
+        if (storyboardScenes.length > STORYBOARD_MAX_SCENES) { toast(`Maxim ${STORYBOARD_MAX_SCENES} scene.`); return; }
+        const totalDur = storyboardScenes.reduce((s,x)=>s+x.duration,0);
+        if (totalDur > STORYBOARD_MAX_TOTAL_SEC) { toast(`Durată totală depășește ${STORYBOARD_MAX_TOTAL_SEC}s.`); return; }
+        const sbRatio = document.querySelector('input[name="vratio"]:checked')?.value || '16:9';
+        const jobId = ++jobCounter;
+        activeJobs.set(jobId, { aborted: false, reader: null });
+        const firstPrompt = storyboardScenes[0].prompt;
+        const cardLabel = `🎬 Storyboard · ${storyboardScenes.length} scene: ${firstPrompt}`;
+        const card = createJobCard(jobId, cardLabel, 'video', 1, sbRatio);
+        document.getElementById('jobs-area').prepend(card);
+        checkEmptyState();
+        if (window.innerWidth < 768) {
+            const sidebar = document.getElementById('sidebar-settings');
+            if (sidebar && !sidebar.classList.contains('translate-y-full')) toggleMobileSettings();
+        }
+        startEtaTimer(jobId, 300); // storyboard: until 5 min
+        markTaskActive(jobId, { type: 'storyboard', prompt: firstPrompt, model: 'grok-storyboard', ratio: sbRatio, count: 1 });
+        runStoryboardJob(jobId, sbRatio, token);
+        return;
+    }
+
     const promptText=document.getElementById('prompt-in').value.trim();
     if(!promptText){ toast('Introdu un prompt descriptiv!'); return; }
     const currentMode=mode;
     const ratio=currentMode==='image'?(document.querySelector('input[name="ratio"]:checked')?.value||'9:16'):(document.querySelector('input[name="vratio"]:checked')?.value||'16:9');
     const refs=[...uploadedRefs];
-    const _activeModelId = document.getElementById('model-sel')?.value || '';
     const _isMotionModel = _activeModelId.includes('motion');
     const startFrame = currentMode==='video' ? (_isMotionModel ? motionImageFile : startFrameFile) : null;
     const endFrame   = currentMode==='video' ? (_isMotionModel ? null : endFrameFile) : null;
@@ -974,6 +1227,52 @@ async function generate(){
         markTaskActive(jobId, { type: 'video', prompt: promptText, model: modelId, ratio, count: vidCount });
     } else {
         markTaskActive(jobId, { type: 'image', prompt: promptText, ratio, count: imgCount });
+    }
+}
+
+// ── Storyboard job runner ──
+async function runStoryboardJob(jobId, ratio, token) {
+    const scenesCopy = storyboardScenes.map(s => ({ prompt: s.prompt, duration: s.duration, mode: 'custom' }));
+    const sceneCount = scenesCopy.length;
+    try {
+        const fd = new FormData();
+        fd.append('scenes', JSON.stringify(scenesCopy));
+        fd.append('aspect_ratio', ratio);
+        fd.append('model_id', 'grok-storyboard');
+        if (_storyboardFirstImageFile) {
+            fd.append('first_image', _storyboardFirstImageFile, _storyboardFirstImageFile.name);
+        }
+        setJobStatus(jobId, `Se generează storyboard cu ${sceneCount} scene...`);
+        const resp = await fetch('/api/media/video-storyboard', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token },
+            body: fd
+        });
+        if (!resp.ok) { const j = await resp.json().catch(()=>{}); throw new Error(j?.error || 'Eroare server'); }
+        const data = await readSSEJob(jobId, resp, { currentMode: 'video', ratio, count: 1 });
+        const { urls, uuids } = extractUrls(data);
+        if (!urls?.length) throw new Error('Nu s-a generat storyboard.');
+        setJobDone(jobId, urls, ratio, 'video', uuids);
+        if (!data?.saved_to_history) await saveToSupabase(urls, `🎬 Storyboard (${sceneCount} scene) — ${scenesCopy[0].prompt}`, 'video', uuids);
+        setTimeout(loadHistory, 3000);
+    } catch (err) {
+        let msg = err.message || '';
+        if (msg === 'Failed to fetch' || msg === 'NetworkError when attempting to fetch resource.' || msg.toLowerCase().includes('network') || msg === 'Load failed') {
+            msg = 'Conexiunea a fost întreruptă. Verifică internetul și reîncearcă.';
+        } else if (msg === 'Nu s-a generat storyboard.') {
+            msg = 'Nu s-a putut genera storyboard. Reîncearcă sau modifică scenele.';
+        }
+        setJobError(jobId, msg);
+    } finally {
+        activeJobs.delete(jobId);
+        try {
+            const r = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } });
+            if (r.ok) {
+                const d = await r.json();
+                document.getElementById('nav-credits').innerText = d.user.credits;
+                const bar = document.getElementById('nav-credits-bar'); if (bar) bar.textContent = d.user.credits;
+            }
+        } catch (e) {}
     }
 }
 

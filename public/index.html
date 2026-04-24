@@ -630,6 +630,78 @@ fontFamily: {
         html.light .job-card.done span[style*="rgba(52,211,153"] { color: #059669 !important; }
 
         html.light #mobile-settings-btn { background: rgba(79,70,229,0.9) !important; }
+
+        /* ═══════════ STORYBOARD ═══════════ */
+        .sb-panel { background: linear-gradient(135deg, rgba(236,72,153,0.04), rgba(99,102,241,0.04)); border: 1px solid rgba(236,72,153,0.18); border-radius: 20px; padding: 20px; margin-bottom: 20px; }
+        .sb-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .sb-title { display:flex; align-items:center; gap:10px; }
+        .sb-title-icon { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, rgba(236,72,153,0.25), rgba(99,102,241,0.25)); border: 1px solid rgba(236,72,153,0.35); display:flex; align-items:center; justify-content:center; font-size: 1rem; }
+        .sb-title-txt { display: flex; flex-direction: column; gap: 2px; }
+        .sb-title-main { display: flex; align-items: center; gap: 7px; font-family: 'Syne', sans-serif; font-weight: 900; color: white; font-size: 0.95rem; letter-spacing: -0.01em; }
+        .sb-new-badge { font-size: 0.52rem; font-weight: 900; padding: 2px 7px; border-radius: 5px; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: white; letter-spacing: 0.1em; box-shadow: 0 2px 8px rgba(236,72,153,0.4); animation: pulseBadge 2s ease-in-out infinite; }
+        @keyframes pulseBadge { 0%,100%{box-shadow:0 2px 8px rgba(236,72,153,0.4);} 50%{box-shadow:0 4px 16px rgba(236,72,153,0.7);} }
+        .sb-title-sub { font-size: 0.68rem; color: rgba(255,255,255,0.35); font-weight: 600; }
+
+        .sb-stats { display: flex; align-items: center; gap: 12px; }
+        .sb-stat { display: flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 9px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); font-size: 0.7rem; font-weight: 700; color: rgba(255,255,255,0.6); }
+        .sb-stat i { font-size: 0.6rem; color: rgba(165,168,255,0.7); }
+        .sb-add-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:11px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; color: white; font-size: 0.78rem; font-weight: 800; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 16px rgba(236,72,153,0.3); }
+        .sb-add-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(236,72,153,0.45); }
+        .sb-add-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+        .sb-table-wrap { border-radius: 14px; overflow: hidden; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); }
+        .sb-table { width: 100%; border-collapse: collapse; }
+        .sb-table thead { background: rgba(255,255,255,0.02); }
+        .sb-table th { text-align: left; padding: 11px 14px; font-size: 0.58rem; font-weight: 800; color: rgba(165,168,255,0.6); text-transform: uppercase; letter-spacing: 0.12em; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .sb-table th.th-actions { text-align: right; }
+        .sb-table th.th-num { width: 40px; }
+        .sb-table th.th-dur, .sb-table th.th-mode { width: 80px; }
+        .sb-table th.th-actions { width: 80px; }
+
+        .scene-row { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
+        .scene-row:last-child { border-bottom: none; }
+        .scene-row:hover { background: rgba(255,255,255,0.02); }
+        .scene-row td { padding: 12px 14px; font-size: 0.78rem; color: rgba(255,255,255,0.7); vertical-align: middle; }
+        .scene-num { width: 40px; }
+        .scene-badge { display:inline-flex; align-items:center; justify-content:center; width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, rgba(236,72,153,0.2), rgba(99,102,241,0.2)); border: 1px solid rgba(236,72,153,0.3); font-size: 0.68rem; font-weight: 900; color: rgba(244,114,182,0.95); }
+        .scene-prompt { max-width: 0; }
+        .scene-prompt-text { font-weight: 500; line-height: 1.4; color: rgba(255,255,255,0.78); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+        .scene-img-chip { display:inline-flex; align-items:center; gap:4px; margin-top:5px; font-size: 0.6rem; font-weight:700; color: rgba(99,211,140,0.9); padding: 2px 6px; border-radius: 5px; background: rgba(99,211,140,0.08); border: 1px solid rgba(99,211,140,0.22); }
+        .scene-img-chip i { font-size: 0.55rem; }
+        .dur-pill { display: inline-block; padding: 3px 9px; border-radius: 7px; background: rgba(251,146,60,0.12); border: 1px solid rgba(251,146,60,0.3); color: rgba(251,196,60,0.95); font-size: 0.68rem; font-weight: 800; }
+        .mode-pill { display: inline-block; padding: 3px 9px; border-radius: 7px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); font-size: 0.65rem; font-weight: 700; }
+        .scene-actions { text-align: right; white-space: nowrap; }
+        .scene-btn { width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.55); cursor: pointer; margin-left: 4px; transition: all 0.15s; font-size: 0.7rem; }
+        .scene-btn:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.35); color: rgba(165,168,255,0.95); transform: scale(1.07); }
+        .scene-btn-danger:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.35); color: rgba(248,113,113,0.95); }
+
+        .sb-empty { padding: 40px 20px; text-align: center; color: rgba(255,255,255,0.3); }
+        .sb-empty-icon { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 12px; background: rgba(236,72,153,0.08); border: 1.5px dashed rgba(236,72,153,0.3); display:flex; align-items:center; justify-content:center; font-size: 1.3rem; color: rgba(236,72,153,0.5); }
+        .sb-empty-txt { font-size: 0.82rem; font-weight: 700; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+        .sb-empty-sub { font-size: 0.68rem; color: rgba(255,255,255,0.25); line-height: 1.5; max-width: 360px; margin: 0 auto; }
+
+        .sb-clear-btn { display:inline-flex; align-items:center; gap:5px; padding: 6px 10px; border-radius: 9px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.45); font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+        .sb-clear-btn:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: rgba(248,113,113,0.85); }
+
+        @media (max-width: 640px) {
+            .sb-table th, .sb-table td { padding: 9px 10px; font-size: 0.72rem; }
+            .sb-table th.th-mode, .sb-table td.scene-mode { display: none; }
+            .sb-header { flex-direction: column; align-items: stretch; }
+            .sb-stats { justify-content: center; }
+        }
+
+        /* Scene modal */
+        #scene-modal input[type="file"] { display: none; }
+        .scene-dropzone { border: 1.5px dashed rgba(236,72,153,0.3); border-radius: 12px; padding: 14px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(236,72,153,0.04); }
+        .scene-dropzone:hover { border-color: rgba(236,72,153,0.55); background: rgba(236,72,153,0.07); }
+
+        /* Light theme */
+        html.light .sb-panel { background: linear-gradient(135deg, rgba(236,72,153,0.06), rgba(99,102,241,0.06)) !important; border-color: rgba(236,72,153,0.25) !important; }
+        html.light .sb-title-main { color: rgba(0,0,0,0.85) !important; }
+        html.light .sb-table-wrap { background: rgba(0,0,0,0.02) !important; border-color: rgba(0,0,0,0.05) !important; }
+        html.light .scene-row td { color: rgba(0,0,0,0.7) !important; }
+        html.light .scene-prompt-text { color: rgba(0,0,0,0.85) !important; }
+        html.light .sb-stat { background: rgba(0,0,0,0.03) !important; border-color: rgba(0,0,0,0.07) !important; color: rgba(0,0,0,0.65) !important; }
     </style>
 </head>
 <body class="h-[100dvh] flex flex-col relative overflow-hidden">
@@ -764,6 +836,65 @@ fontFamily: {
     </div>
 </div>
 
+<!-- ═══════════ SCENE MODAL (Storyboard) ═══════════ -->
+<div id="scene-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(20px);z-index:200001;align-items:center;justify-content:center;opacity:0;transition:opacity 0.25s" onclick="closeSceneModal(event)">
+    <div onclick="event.stopPropagation()" style="background:linear-gradient(135deg,#12121e 0%,#0e0e1a 100%);border:1px solid rgba(236,72,153,0.18);border-radius:22px;width:90%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 40px 80px -20px rgba(0,0,0,0.7),0 0 0 1px rgba(236,72,153,0.15);position:relative">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.07)">
+            <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,rgba(236,72,153,0.25),rgba(99,102,241,0.25));border:1px solid rgba(236,72,153,0.35);display:flex;align-items:center;justify-content:center">
+                    <i class="fa-solid fa-clapperboard" style="color:rgba(244,114,182,0.95);font-size:0.85rem"></i>
+                </div>
+                <div>
+                    <h3 id="scene-modal-title" style="font-size:1rem;font-weight:800;color:white;margin:0;line-height:1.2">Adaugă scenă</h3>
+                    <p style="font-size:0.68rem;color:rgba(255,255,255,0.3);margin:0;font-weight:600">Prompt + durată pentru această scenă</p>
+                </div>
+            </div>
+            <button onclick="closeSceneModal()" style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+
+        <!-- Prompt -->
+        <div style="padding:18px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <label style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);display:block;margin-bottom:8px">Prompt scenă <span style="color:rgba(248,113,113,0.8)">*</span></label>
+            <textarea id="scene-prompt" rows="4" placeholder="Descrie ce se întâmplă în această scenă..." style="width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 14px;font-size:0.85rem;color:rgba(255,255,255,0.9);outline:none;resize:none;font-family:'Inter',sans-serif;transition:border-color 0.2s;box-sizing:border-box" onfocus="this.style.borderColor='rgba(236,72,153,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'"></textarea>
+        </div>
+
+        <!-- Duration -->
+        <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <label style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);display:block;margin-bottom:10px">Durată</label>
+            <div style="display:flex;gap:8px">
+                <button onclick="selectSceneDuration(6)" id="scene-dur-6" style="flex:1;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;transition:all 0.2s;background:rgba(236,72,153,0.15);border:1.5px solid rgba(236,72,153,0.5);color:rgba(244,114,182,0.95)">6 secunde</button>
+                <button onclick="selectSceneDuration(10)" id="scene-dur-10" style="flex:1;padding:9px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;transition:all 0.2s;background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)">10 secunde</button>
+            </div>
+        </div>
+
+        <!-- Image Reference (doar prima scenă — test 1b) -->
+        <div id="scene-image-section" style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:none">
+            <label style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.3);display:flex;align-items:center;gap:6px;margin-bottom:10px">
+                <i class="fa-solid fa-image" style="color:rgba(99,211,140,0.7);font-size:0.6rem"></i>
+                Imagine referință <span style="text-transform:none;letter-spacing:normal;font-weight:500;color:rgba(255,255,255,0.2)">(opțional · doar prima scenă)</span>
+            </label>
+            <input type="file" id="scene-image-input" accept="image/*" onchange="handleSceneImageSelect(event)">
+            <div id="scene-image-zone" class="scene-dropzone" onclick="document.getElementById('scene-image-input').click()">
+                <i class="fa-solid fa-cloud-arrow-up" style="color:rgba(236,72,153,0.5);font-size:1.1rem;margin-bottom:4px;display:block"></i>
+                <span style="font-size:0.7rem;font-weight:700;color:rgba(236,72,153,0.75)">Alege imagine de start</span>
+                <div style="font-size:0.58rem;margin-top:3px;color:rgba(255,255,255,0.25)">JPG/PNG · max ~15MB</div>
+            </div>
+            <div id="scene-image-preview" style="display:none;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:rgba(99,211,140,0.06);border:1px solid rgba(99,211,140,0.2)">
+                <i class="fa-solid fa-image" style="color:rgba(99,211,140,0.8);flex-shrink:0"></i>
+                <span id="scene-image-name" style="flex:1;font-size:0.7rem;font-weight:700;color:rgba(255,255,255,0.65);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">imagine.jpg</span>
+                <button onclick="removeSceneImage()" style="width:22px;height:22px;border-radius:50%;background:rgba(239,68,68,0.8);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.5rem;flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding:16px 24px;display:flex;align-items:center;justify-content:flex-end;gap:10px">
+            <button onclick="closeSceneModal()" style="padding:10px 18px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);font-size:0.82rem;font-weight:700;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">Anulează</button>
+            <button onclick="saveScene()" style="padding:10px 22px;border-radius:12px;background:linear-gradient(135deg,#ec4899,#8b5cf6);color:white;border:none;font-size:0.85rem;font-weight:800;cursor:pointer;transition:all 0.2s;box-shadow:0 6px 18px rgba(236,72,153,0.3)" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 10px 24px rgba(236,72,153,0.45)'" onmouseout="this.style.transform='none';this.style.boxShadow='0 6px 18px rgba(236,72,153,0.3)'"><i class="fa-solid fa-check" style="margin-right:5px;font-size:0.75rem"></i>Salvează</button>
+        </div>
+    </div>
+</div>
+
 <!-- NAV -->
 <div class="sticky top-0 z-50 flex w-full justify-center px-4 pt-4 pb-2 max-w-screen-2xl mx-auto relative z-10">
     <nav class="nav-glass w-full px-4 md:px-6 py-3 flex justify-between items-center">
@@ -842,7 +973,7 @@ fontFamily: {
             </div>
 
             <!-- PROMPT -->
-            <div class="panel-s">
+            <div class="panel-s" id="prompt-panel">
                 <label class="field-label">Prompt</label>
                 <div class="prompt-wrap" style="position:relative">
                     <textarea id="prompt-in" rows="5" placeholder="Descrie în detaliu ce vrei să generezi..." class="w-full bg-transparent p-4 text-[0.92rem] font-medium outline-none leading-relaxed no-scrollbar" oninput="handlePromptInput()"></textarea>
@@ -896,7 +1027,7 @@ fontFamily: {
                         <label class="ratio-pill"><input type="radio" name="vratio" value="21:9"><span><div class="w-[21px] h-[7px] border-[2px] border-current rounded-[2px] opacity-60"></div>21:9</span></label>
                     </div>
                 </div>
-                <div class="panel-s pt-0">
+                <div class="panel-s pt-0" id="vcount-panel">
                     <label class="field-label">Număr Videoclipuri (1–4)</label>
                     <div class="flex items-center gap-3 rounded-xl p-1.5 w-fit" style="background:rgba(255,255,255,0.03)">
                         <button class="count-btn" onclick="updateVCount(-1)">−</button>
@@ -1062,6 +1193,51 @@ fontFamily: {
             </div>
 
             <div id="jobs-area" class="w-full"></div>
+
+            <!-- ═══════════ STORYBOARD PANEL (Grok multi-scenă) ═══════════ -->
+            <div id="storyboard-panel" class="sb-panel" style="display:none">
+                <div class="sb-header">
+                    <div class="sb-title">
+                        <div class="sb-title-icon">🎬</div>
+                        <div class="sb-title-txt">
+                            <div class="sb-title-main">
+                                Grok Storyboard
+                                <span class="sb-new-badge">NOU</span>
+                            </div>
+                            <div class="sb-title-sub">Creează un video multi-scenă · fiecare scenă se leagă automat de precedenta</div>
+                        </div>
+                    </div>
+                    <div class="sb-stats">
+                        <span class="sb-stat"><i class="fa-solid fa-layer-group"></i> <span id="scenes-counter">0 scene</span></span>
+                        <span class="sb-stat"><i class="fa-solid fa-clock"></i> <span id="scenes-total-dur">0s / 45s</span></span>
+                    </div>
+                </div>
+
+                <div class="sb-table-wrap">
+                    <table class="sb-table">
+                        <thead>
+                            <tr>
+                                <th class="th-num">#</th>
+                                <th>Prompt</th>
+                                <th class="th-dur">Durată</th>
+                                <th class="th-mode">Mod</th>
+                                <th class="th-actions">Acțiuni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scenes-tbody"></tbody>
+                    </table>
+                    <div id="scenes-empty" class="sb-empty">
+                        <div class="sb-empty-icon">🎬</div>
+                        <div class="sb-empty-txt">Încă nicio scenă</div>
+                        <div class="sb-empty-sub">Apasă <strong style="color:rgba(244,114,182,0.9)">+ Adaugă scenă</strong> pentru a construi storyboard-ul. Ai nevoie de minim 2 scene (max 10), maxim 45s total. Fiecare scenă costă 2 credite.</div>
+                    </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap">
+                    <button id="sb-clear-btn" onclick="clearAllScenes()" class="sb-clear-btn"><i class="fa-solid fa-trash-can" style="font-size:0.6rem"></i> Șterge toate</button>
+                    <button onclick="openSceneModal()" class="sb-add-btn"><i class="fa-solid fa-plus" style="font-size:0.7rem"></i> Adaugă scenă</button>
+                </div>
+            </div>
 
             <!-- HISTORY -->
             <div class="w-full mt-auto pt-8 pb-4" style="border-top:1px solid rgba(255,255,255,0.04)">
