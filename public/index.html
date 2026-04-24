@@ -840,23 +840,23 @@
                             <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
                         </optgroup>
                         <optgroup label="🎬 Kling 3.0 — Text to Video" id="og-kling" style="display:none">
-                            <option value="kling-3-0-720p"  data-type="video">Kling 3.0 · 720p · 3–15s 🏆 (10 cr/s)</option>
-                            <option value="kling-3-0-1080p" data-type="video">Kling 3.0 · 1080p · 3–15s 💎 (12 cr/s)</option>
+                            <option value="kling-3-0-720p"  data-type="video">Kling 3.0 · 720p · 3–15s 🏆 (5s=6cr · 10s=12cr)</option>
+                            <option value="kling-3-0-1080p" data-type="video">Kling 3.0 · 1080p · 3–15s 💎 (5s=8cr · 10s=15cr)</option>
                         </optgroup>
                         <optgroup label="🎬 Kling 2.6 — Text to Video" id="og-kling-2-6" style="display:none">
-                            <option value="kling-2-6-720p"        data-type="video">Kling 2.6 · 720p · 5s/10s (30/60 cr)</option>
-                            <option value="kling-2-6-1080p"       data-type="video">Kling 2.6 · 1080p · 5s/10s 💎 (60/100 cr)</option>
-                            <option value="kling-2-6-1080p-audio" data-type="video">Kling 2.6 · 1080p + Audio 🎵 (70/140 cr)</option>
+                            <option value="kling-2-6-720p"        data-type="video">Kling 2.6 · 720p · 5s=4cr / 10s=8cr</option>
+                            <option value="kling-2-6-1080p"       data-type="video">Kling 2.6 · 1080p 💎 · 5s=6cr / 10s=12cr</option>
+                            <option value="kling-2-6-1080p-audio" data-type="video">Kling 2.6 · 1080p + Audio 🎵 · 5s=9cr / 10s=17cr</option>
                         </optgroup>
-                        <optgroup label="🎥 Kling Motion Control" id="og-kling-motion" style="display:none">
-                            <option value="kling-motion-2-6-720p"  data-type="video">Kling 2.6 Motion · 720p — 30 cr</option>
-                            <option value="kling-motion-2-6-1080p" data-type="video">Kling 2.6 Motion · 1080p 💎 — 45 cr</option>
-                            <option value="kling-motion-3-720p"    data-type="video">Kling 3.0 Motion · 720p 🏆 — 50 cr</option>
-                            <option value="kling-motion-3-1080p"   data-type="video">Kling 3.0 Motion · 1080p 💎🏆 — 80 cr</option>
+                        <optgroup label="🎥 Kling Motion Control — preț fix" id="og-kling-motion" style="display:none">
+                            <option value="kling-motion-2-6-720p"  data-type="video">Kling 2.6 Motion · 720p — 4 Credite</option>
+                            <option value="kling-motion-2-6-1080p" data-type="video">Kling 2.6 Motion · 1080p 💎 — 6 Credite</option>
+                            <option value="kling-motion-3-720p"    data-type="video">Kling 3.0 Motion · 720p 🏆 — 6 Credite</option>
+                            <option value="kling-motion-3-1080p"   data-type="video">Kling 3.0 Motion · 1080p 💎🏆 — 10 Credite</option>
                         </optgroup>
                         <optgroup label="🌱 Bytedance Seedance 2 Fast" id="og-seedance" style="display:none">
-                            <option value="seedance-fast-480p" data-type="video">Seedance Fast · 480p · 4–15s ⚡ (12 cr/s)</option>
-                            <option value="seedance-fast-720p" data-type="video">Seedance Fast · 720p · 4–15s 💎 (19 cr/s)</option>
+                            <option value="seedance-fast-480p" data-type="video">Seedance Fast · 480p · 4–15s ⚡ (5s=8cr · 10s=15cr)</option>
+                            <option value="seedance-fast-720p" data-type="video">Seedance Fast · 720p · 4–15s 💎 (5s=13cr · 10s=25cr)</option>
                         </optgroup>
                     </select>
                 </div>
@@ -953,6 +953,8 @@
                         <span id="ref-video-name" class="flex-1 text-[0.7rem] font-bold truncate" style="color:rgba(255,255,255,0.6)">video.mp4</span>
                         <button onclick="removeRefVideo()" style="width:22px;height:22px;border-radius:50%;background:rgba(239,68,68,0.8);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.5rem;flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>
                     </div>
+                    <p id="ref-video-cost" class="text-[0.62rem] font-bold mt-1.5" style="color:rgba(251,196,60,0.7);min-height:14px"></p>
+                    <p class="text-[0.58rem] mt-1" style="color:rgba(255,255,255,0.2)">Costul se calculează automat din durata videoclipului tău</p>
                 </div>
 
                 <!-- START & END FRAME -->
