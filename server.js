@@ -729,7 +729,7 @@ app.post('/api/media/video',
             } else if (model_id === 'seedance-fast-480p' || model_id === 'seedance-fast-720p') {
                 // Bytedance Seedance
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/seedance';
-                apiModel = 'bytedance-seedance-2-fast';
+                apiModel = 'seedance-2';
                 klingMode = null;
                 duration = Math.min(Math.max(reqDuration, 4), 15);
                 grokAspect = toKlingAspect(aspect_ratio);
@@ -810,17 +810,26 @@ console.log(`[Video] START | model=${model_id} → api=${apiModel} res=${resolut
                             } else if (klingCfg.motion && !refVideoFile) {
                                 console.warn(`[Kling] Motion model fără ref_video! UUID va eșua.`);
                             }
-                            // Imagini de referință (max 4 pentru Kling)
-                            const klingRefs = refImages.slice(0, 4);
-                            for (const ref of klingRefs) {
-                                const compressed = await compressForVideo(ref.buffer, ref.mimetype, 'kling');
-                                const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
-                                formData.append('ref_images', blob, 'ref.jpg');
-                            }
-                            if (startImageFile && klingRefs.length < 4) {
+                            // Motion control: imaginea de referință a personajului (start_image)
+                            if (klingCfg.motion && startImageFile) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'kling');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
-                                formData.append('ref_images', blob, 'ref_start.jpg');
+                                formData.append('ref_images', blob, 'ref_character.jpg');
+                                console.log(`[Kling] Motion ref_image (character): ${compressed.buffer.length} bytes`);
+                            }
+                            // Imagini de referință normale (max 4 pentru Kling non-motion)
+                            if (!klingCfg.motion) {
+                                const klingRefs = refImages.slice(0, 4);
+                                for (const ref of klingRefs) {
+                                    const compressed = await compressForVideo(ref.buffer, ref.mimetype, 'kling');
+                                    const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                    formData.append('ref_images', blob, 'ref.jpg');
+                                }
+                                if (startImageFile && klingRefs.length < 4) {
+                                    const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'kling');
+                                    const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
+                                    formData.append('ref_images', blob, 'ref_start.jpg');
+                                }
                             }
                         } else if (isGrok) {
                             formData.append('aspect_ratio', grokAspect);
