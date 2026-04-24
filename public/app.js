@@ -62,24 +62,24 @@ const VID_SELECT_HTML = `
   <option value="grok-720p-10s">Grok 3 · 10s</option>
   <option value="grok-storyboard">🎬 Grok Storyboard · NOU ✨</option>
 </optgroup>
-<optgroup label="Kling 3.0">
-  <option value="kling-3-0-720p">Kling 3.0 · 720p</option>
-  <option value="kling-3-0-1080p">Kling 3.0 · 1080p</option>
+<optgroup label="Kling 3.0 · în mentenanță">
+  <option value="kling-3-0-720p" disabled>Kling 3.0 · 720p — indisponibil</option>
+  <option value="kling-3-0-1080p" disabled>Kling 3.0 · 1080p — indisponibil</option>
 </optgroup>
-<optgroup label="Kling 2.6">
-  <option value="kling-2-6-720p">Kling 2.6 · 720p</option>
-  <option value="kling-2-6-1080p">Kling 2.6 · 1080p</option>
-  <option value="kling-2-6-1080p-audio">Kling 2.6 · Audio 1080p</option>
+<optgroup label="Kling 2.6 · în mentenanță">
+  <option value="kling-2-6-720p" disabled>Kling 2.6 · 720p — indisponibil</option>
+  <option value="kling-2-6-1080p" disabled>Kling 2.6 · 1080p — indisponibil</option>
+  <option value="kling-2-6-1080p-audio" disabled>Kling 2.6 · Audio 1080p — indisponibil</option>
 </optgroup>
-<optgroup label="Kling Motion Control">
-  <option value="kling-motion-2-6-720p">Kling 2.6 Motion · 720p</option>
-  <option value="kling-motion-2-6-1080p">Kling 2.6 Motion · 1080p</option>
-  <option value="kling-motion-3-720p">Kling 3.0 Motion · 720p</option>
-  <option value="kling-motion-3-1080p">Kling 3.0 Motion · 1080p</option>
+<optgroup label="Kling Motion Control · în mentenanță">
+  <option value="kling-motion-2-6-720p" disabled>Kling 2.6 Motion · 720p — indisponibil</option>
+  <option value="kling-motion-2-6-1080p" disabled>Kling 2.6 Motion · 1080p — indisponibil</option>
+  <option value="kling-motion-3-720p" disabled>Kling 3.0 Motion · 720p — indisponibil</option>
+  <option value="kling-motion-3-1080p" disabled>Kling 3.0 Motion · 1080p — indisponibil</option>
 </optgroup>
-<optgroup label="Seedance 2 Fast">
-  <option value="seedance-fast-480p">Seedance Fast · 480p</option>
-  <option value="seedance-fast-720p">Seedance Fast · 720p</option>
+<optgroup label="Seedance 2 Fast · în mentenanță">
+  <option value="seedance-fast-480p" disabled>Seedance Fast · 480p — indisponibil</option>
+  <option value="seedance-fast-720p" disabled>Seedance Fast · 720p — indisponibil</option>
 </optgroup>`;
 
 function rebuildModelSelect(currentMode) {
@@ -546,6 +546,22 @@ function setJobError(jobId, msg){ stopEtaTimer(jobId);
         clearActiveTask();
     }
 
+    // ⚠️ După orice eroare, forțăm refresh la credite (să nu rămână afișat
+    // un sold vechi din cache dacă cumva ceva a părut să scadă)
+    try {
+        const t = getToken();
+        if (t) {
+            fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + t }, cache: 'no-store' })
+                .then(r => r.ok ? r.json() : null)
+                .then(d => {
+                    if (!d?.user) return;
+                    const nc = document.getElementById('nav-credits'); if (nc) nc.innerText = d.user.credits;
+                    const bar = document.getElementById('nav-credits-bar'); if (bar) bar.textContent = d.user.credits;
+                })
+                .catch(() => {});
+        }
+    } catch(e) {}
+
     const body=document.getElementById(`job-body-${jobId}`); const card=document.getElementById(`job-${jobId}`);
     if(!body) return;
     card.className='job-card error';
@@ -981,10 +997,13 @@ function updateStoryboardUI() {
     const durSection = document.getElementById('kling-dur-section');
     const motionSection = document.getElementById('kling-motion-section');
     const motionImgSection = document.getElementById('kling-motion-image-section');
+    const sidebar = document.getElementById('sidebar-settings');
 
     if (panel) panel.style.display = active ? '' : 'none';
     if (promptPanel) promptPanel.style.display = active ? 'none' : '';
     if (vcountPanel) vcountPanel.style.display = active ? 'none' : '';
+    // Lățim sidebar-ul pentru a încăpea mai confortabil scene cards
+    if (sidebar) sidebar.classList.toggle('sidebar-wide', active);
     if (active) {
         // Ascundem restul secțiunilor video specifice
         if (framesSection) framesSection.style.display = 'none';
@@ -997,45 +1016,53 @@ function updateStoryboardUI() {
 }
 
 function renderScenesTable() {
-    const tbody = document.getElementById('scenes-tbody');
+    const list = document.getElementById('scenes-list');
     const emptyEl = document.getElementById('scenes-empty');
     const counter = document.getElementById('scenes-counter');
     const totalDurEl = document.getElementById('scenes-total-dur');
+    const durPill = document.getElementById('scenes-dur-pill');
     const genBtn = document.getElementById('gen-btn');
-    if (!tbody) return;
+    if (!list) return;
 
     const totalDur = storyboardScenes.reduce((s, x) => s + (x.duration||0), 0);
 
-    if (counter) counter.textContent = `${storyboardScenes.length} scen${storyboardScenes.length === 1 ? 'ă' : 'e'}`;
-    if (totalDurEl) {
-        const overLimit = totalDur > STORYBOARD_MAX_TOTAL_SEC;
-        totalDurEl.textContent = `${totalDur}s / ${STORYBOARD_MAX_TOTAL_SEC}s`;
-        totalDurEl.style.color = overLimit ? 'rgba(248,113,113,0.9)' : (totalDur >= STORYBOARD_MAX_TOTAL_SEC - 6 ? 'rgba(251,196,60,0.9)' : 'rgba(165,168,255,0.7)');
+    if (counter) counter.textContent = storyboardScenes.length;
+    if (totalDurEl) totalDurEl.textContent = `${totalDur}s/${STORYBOARD_MAX_TOTAL_SEC}s`;
+    if (durPill) {
+        durPill.classList.remove('dur-warn','dur-over');
+        if (totalDur > STORYBOARD_MAX_TOTAL_SEC) durPill.classList.add('dur-over');
+        else if (totalDur >= STORYBOARD_MAX_TOTAL_SEC - 6) durPill.classList.add('dur-warn');
     }
 
     if (storyboardScenes.length === 0) {
-        tbody.innerHTML = '';
+        list.innerHTML = '';
+        list.style.display = 'none';
         if (emptyEl) emptyEl.style.display = '';
     } else {
+        list.style.display = '';
         if (emptyEl) emptyEl.style.display = 'none';
-        tbody.innerHTML = storyboardScenes.map((s, i) => {
+        list.innerHTML = storyboardScenes.map((s, i) => {
             const isFirst = i === 0;
             const hasImg = isFirst && _storyboardFirstImageFile;
             return `
-                <tr class="scene-row">
-                    <td class="scene-num"><span class="scene-badge">${i+1}</span></td>
-                    <td class="scene-prompt"><div class="scene-prompt-text">${escHtml(s.prompt)}</div>${hasImg ? '<div class="scene-img-chip"><i class="fa-solid fa-image"></i> imagine start</div>' : ''}</td>
-                    <td class="scene-dur"><span class="dur-pill">${s.duration}s</span></td>
-                    <td class="scene-mode"><span class="mode-pill">Custom</span></td>
-                    <td class="scene-actions">
+                <div class="scene-row">
+                    <span class="scene-badge">${i+1}</span>
+                    <div class="scene-body">
+                        <div class="scene-prompt-text">${escHtml(s.prompt)}</div>
+                        <div class="scene-meta-row">
+                            <span class="dur-pill">${s.duration}s</span>
+                            ${hasImg ? '<span class="scene-img-chip"><i class="fa-solid fa-image"></i> imagine start</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="scene-actions">
                         <button onclick="editScene(${i})" class="scene-btn" title="Editează"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="removeScene(${i})" class="scene-btn scene-btn-danger" title="Șterge"><i class="fa-solid fa-trash"></i></button>
-                    </td>
-                </tr>`;
+                    </div>
+                </div>`;
         }).join('');
     }
 
-    // Actualizăm butonul Generate
+    // Butonul Generate — dezactivat dacă scenele nu-s valide
     if (genBtn) {
         const validCount = storyboardScenes.length >= STORYBOARD_MIN_SCENES && storyboardScenes.length <= STORYBOARD_MAX_SCENES;
         const validDur = totalDur <= STORYBOARD_MAX_TOTAL_SEC && totalDur > 0;

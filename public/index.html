@@ -631,77 +631,66 @@ fontFamily: {
 
         html.light #mobile-settings-btn { background: rgba(79,70,229,0.9) !important; }
 
-        /* ═══════════ STORYBOARD ═══════════ */
-        .sb-panel { background: linear-gradient(135deg, rgba(236,72,153,0.04), rgba(99,102,241,0.04)); border: 1px solid rgba(236,72,153,0.18); border-radius: 20px; padding: 20px; margin-bottom: 20px; }
-        .sb-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .sb-title { display:flex; align-items:center; gap:10px; }
-        .sb-title-icon { width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, rgba(236,72,153,0.25), rgba(99,102,241,0.25)); border: 1px solid rgba(236,72,153,0.35); display:flex; align-items:center; justify-content:center; font-size: 1rem; }
-        .sb-title-txt { display: flex; flex-direction: column; gap: 2px; }
-        .sb-title-main { display: flex; align-items: center; gap: 7px; font-family: 'Syne', sans-serif; font-weight: 900; color: white; font-size: 0.95rem; letter-spacing: -0.01em; }
-        .sb-new-badge { font-size: 0.52rem; font-weight: 900; padding: 2px 7px; border-radius: 5px; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: white; letter-spacing: 0.1em; box-shadow: 0 2px 8px rgba(236,72,153,0.4); animation: pulseBadge 2s ease-in-out infinite; }
-        @keyframes pulseBadge { 0%,100%{box-shadow:0 2px 8px rgba(236,72,153,0.4);} 50%{box-shadow:0 4px 16px rgba(236,72,153,0.7);} }
-        .sb-title-sub { font-size: 0.68rem; color: rgba(255,255,255,0.35); font-weight: 600; }
-
-        .sb-stats { display: flex; align-items: center; gap: 12px; }
-        .sb-stat { display: flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 9px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); font-size: 0.7rem; font-weight: 700; color: rgba(255,255,255,0.6); }
-        .sb-stat i { font-size: 0.6rem; color: rgba(165,168,255,0.7); }
-        .sb-add-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:11px; background: linear-gradient(135deg, #ec4899, #8b5cf6); border: none; color: white; font-size: 0.78rem; font-weight: 800; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 16px rgba(236,72,153,0.3); }
-        .sb-add-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(236,72,153,0.45); }
-        .sb-add-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-
-        .sb-table-wrap { border-radius: 14px; overflow: hidden; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); }
-        .sb-table { width: 100%; border-collapse: collapse; }
-        .sb-table thead { background: rgba(255,255,255,0.02); }
-        .sb-table th { text-align: left; padding: 11px 14px; font-size: 0.58rem; font-weight: 800; color: rgba(165,168,255,0.6); text-transform: uppercase; letter-spacing: 0.12em; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .sb-table th.th-actions { text-align: right; }
-        .sb-table th.th-num { width: 40px; }
-        .sb-table th.th-dur, .sb-table th.th-mode { width: 80px; }
-        .sb-table th.th-actions { width: 80px; }
-
-        .scene-row { border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s; }
-        .scene-row:last-child { border-bottom: none; }
-        .scene-row:hover { background: rgba(255,255,255,0.02); }
-        .scene-row td { padding: 12px 14px; font-size: 0.78rem; color: rgba(255,255,255,0.7); vertical-align: middle; }
-        .scene-num { width: 40px; }
-        .scene-badge { display:inline-flex; align-items:center; justify-content:center; width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(135deg, rgba(236,72,153,0.2), rgba(99,102,241,0.2)); border: 1px solid rgba(236,72,153,0.3); font-size: 0.68rem; font-weight: 900; color: rgba(244,114,182,0.95); }
-        .scene-prompt { max-width: 0; }
-        .scene-prompt-text { font-weight: 500; line-height: 1.4; color: rgba(255,255,255,0.78); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
-        .scene-img-chip { display:inline-flex; align-items:center; gap:4px; margin-top:5px; font-size: 0.6rem; font-weight:700; color: rgba(99,211,140,0.9); padding: 2px 6px; border-radius: 5px; background: rgba(99,211,140,0.08); border: 1px solid rgba(99,211,140,0.22); }
-        .scene-img-chip i { font-size: 0.55rem; }
-        .dur-pill { display: inline-block; padding: 3px 9px; border-radius: 7px; background: rgba(251,146,60,0.12); border: 1px solid rgba(251,146,60,0.3); color: rgba(251,196,60,0.95); font-size: 0.68rem; font-weight: 800; }
-        .mode-pill { display: inline-block; padding: 3px 9px; border-radius: 7px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); font-size: 0.65rem; font-weight: 700; }
-        .scene-actions { text-align: right; white-space: nowrap; }
-        .scene-btn { width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.55); cursor: pointer; margin-left: 4px; transition: all 0.15s; font-size: 0.7rem; }
-        .scene-btn:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.35); color: rgba(165,168,255,0.95); transform: scale(1.07); }
-        .scene-btn-danger:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.35); color: rgba(248,113,113,0.95); }
-
-        .sb-empty { padding: 40px 20px; text-align: center; color: rgba(255,255,255,0.3); }
-        .sb-empty-icon { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 12px; background: rgba(236,72,153,0.08); border: 1.5px dashed rgba(236,72,153,0.3); display:flex; align-items:center; justify-content:center; font-size: 1.3rem; color: rgba(236,72,153,0.5); }
-        .sb-empty-txt { font-size: 0.82rem; font-weight: 700; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
-        .sb-empty-sub { font-size: 0.68rem; color: rgba(255,255,255,0.25); line-height: 1.5; max-width: 360px; margin: 0 auto; }
-
-        .sb-clear-btn { display:inline-flex; align-items:center; gap:5px; padding: 6px 10px; border-radius: 9px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.45); font-size: 0.65rem; font-weight: 700; cursor: pointer; transition: all 0.15s; }
-        .sb-clear-btn:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: rgba(248,113,113,0.85); }
-
-        @media (max-width: 640px) {
-            .sb-table th, .sb-table td { padding: 9px 10px; font-size: 0.72rem; }
-            .sb-table th.th-mode, .sb-table td.scene-mode { display: none; }
-            .sb-header { flex-direction: column; align-items: stretch; }
-            .sb-stats { justify-content: center; }
+        /* ═══════════ STORYBOARD — SIDEBAR COMPACT ═══════════ */
+        /* Sidebar lățit când storyboard e activ */
+        @media (min-width: 768px) {
+            #sidebar-settings.sidebar-wide { width: 520px !important; }
         }
 
-        /* Scene modal */
+        /* Header (label + stats) */
+        .sb-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 12px; flex-wrap: wrap; }
+        .sb-head-stats { display:flex; align-items:center; gap:6px; }
+        .sb-mini-stat { display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border-radius:7px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); font-size:0.65rem; font-weight:700; color:rgba(255,255,255,0.6); font-family:'Syne',sans-serif; }
+        .sb-mini-stat i { font-size:0.55rem; color:rgba(165,168,255,0.65); }
+        .sb-mini-stat.dur-warn { color:rgba(251,196,60,0.95); border-color:rgba(251,196,60,0.3); background:rgba(251,146,60,0.08); }
+        .sb-mini-stat.dur-warn i { color:rgba(251,196,60,0.8); }
+        .sb-mini-stat.dur-over { color:rgba(248,113,113,0.95); border-color:rgba(248,113,113,0.3); background:rgba(239,68,68,0.08); }
+        .sb-mini-stat.dur-over i { color:rgba(248,113,113,0.8); }
+
+        /* NEW badge pulsant */
+        .sb-new-badge { font-size: 0.5rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: white; letter-spacing: 0.1em; box-shadow: 0 2px 8px rgba(236,72,153,0.35); animation: pulseBadge 2s ease-in-out infinite; margin-left:4px; }
+        @keyframes pulseBadge { 0%,100%{box-shadow:0 2px 8px rgba(236,72,153,0.35);} 50%{box-shadow:0 3px 14px rgba(236,72,153,0.65);} }
+
+        /* Scene card în sidebar — stacked layout */
+        #scenes-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+        .scene-row { display:flex; align-items:flex-start; gap:9px; padding:9px 10px; border-radius:10px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); transition:all 0.15s; }
+        .scene-row:hover { background:rgba(236,72,153,0.05); border-color:rgba(236,72,153,0.2); }
+        .scene-badge { flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg, rgba(236,72,153,0.22), rgba(99,102,241,0.22)); border:1px solid rgba(236,72,153,0.35); font-size:0.65rem; font-weight:900; color:rgba(244,114,182,0.95); font-family:'Syne',sans-serif; margin-top:1px; }
+        .scene-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+        .scene-prompt-text { font-size:0.77rem; line-height:1.35; color:rgba(255,255,255,0.78); font-weight:500; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+        .scene-meta-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .dur-pill { display:inline-flex; align-items:center; padding:2px 7px; border-radius:5px; background:rgba(251,146,60,0.12); border:1px solid rgba(251,146,60,0.3); color:rgba(251,196,60,0.95); font-size:0.62rem; font-weight:800; }
+        .scene-img-chip { display:inline-flex; align-items:center; gap:3px; font-size:0.58rem; font-weight:700; color:rgba(99,211,140,0.9); padding:2px 6px; border-radius:5px; background:rgba(99,211,140,0.08); border:1px solid rgba(99,211,140,0.22); }
+        .scene-img-chip i { font-size:0.5rem; }
+        .scene-actions { flex-shrink:0; display:flex; gap:4px; }
+        .scene-btn { width:24px; height:24px; border-radius:6px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.5); cursor:pointer; transition:all 0.15s; font-size:0.6rem; display:flex; align-items:center; justify-content:center; }
+        .scene-btn:hover { background:rgba(99,102,241,0.15); border-color:rgba(99,102,241,0.4); color:rgba(165,168,255,0.95); }
+        .scene-btn-danger:hover { background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.4); color:rgba(248,113,113,0.95); }
+
+        /* Empty state (compact) */
+        .sb-empty-compact { padding:18px 14px; text-align:center; border-radius:12px; background:rgba(236,72,153,0.03); border:1.5px dashed rgba(236,72,153,0.18); margin-bottom:10px; }
+        .sb-empty-icon-sm { font-size:1.4rem; margin-bottom:6px; opacity:0.6; }
+        .sb-empty-txt-sm { font-size:0.75rem; font-weight:700; color:rgba(255,255,255,0.45); margin-bottom:3px; font-family:'Syne',sans-serif; }
+        .sb-empty-sub-sm { font-size:0.6rem; color:rgba(255,255,255,0.3); line-height:1.4; }
+
+        /* Action buttons row */
+        .sb-actions-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .sb-add-btn-compact { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:9px 12px; border-radius:10px; background:linear-gradient(135deg,#ec4899,#8b5cf6); border:none; color:white; font-size:0.75rem; font-weight:800; cursor:pointer; transition:all 0.2s; box-shadow:0 3px 12px rgba(236,72,153,0.28); font-family:'Syne',sans-serif; letter-spacing:0.01em; }
+        .sb-add-btn-compact:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(236,72,153,0.42); }
+        .sb-clear-btn { display:inline-flex; align-items:center; gap:5px; padding:8px 11px; border-radius:10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.45); font-size:0.66rem; font-weight:700; cursor:pointer; transition:all 0.15s; font-family:'Syne',sans-serif; white-space:nowrap; }
+        .sb-clear-btn:hover { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.25); color:rgba(248,113,113,0.9); }
+
+        /* Scene modal — dropzone + file input */
         #scene-modal input[type="file"] { display: none; }
         .scene-dropzone { border: 1.5px dashed rgba(236,72,153,0.3); border-radius: 12px; padding: 14px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(236,72,153,0.04); }
         .scene-dropzone:hover { border-color: rgba(236,72,153,0.55); background: rgba(236,72,153,0.07); }
 
         /* Light theme */
-        html.light .sb-panel { background: linear-gradient(135deg, rgba(236,72,153,0.06), rgba(99,102,241,0.06)) !important; border-color: rgba(236,72,153,0.25) !important; }
-        html.light .sb-title-main { color: rgba(0,0,0,0.85) !important; }
-        html.light .sb-table-wrap { background: rgba(0,0,0,0.02) !important; border-color: rgba(0,0,0,0.05) !important; }
-        html.light .scene-row td { color: rgba(0,0,0,0.7) !important; }
-        html.light .scene-prompt-text { color: rgba(0,0,0,0.85) !important; }
-        html.light .sb-stat { background: rgba(0,0,0,0.03) !important; border-color: rgba(0,0,0,0.07) !important; color: rgba(0,0,0,0.65) !important; }
+        html.light .scene-row { background:rgba(0,0,0,0.02) !important; border-color:rgba(0,0,0,0.06) !important; }
+        html.light .scene-row:hover { background:rgba(236,72,153,0.06) !important; }
+        html.light .scene-prompt-text { color:rgba(0,0,0,0.78) !important; }
+        html.light .sb-mini-stat { background:rgba(0,0,0,0.03) !important; border-color:rgba(0,0,0,0.07) !important; color:rgba(0,0,0,0.65) !important; }
+        html.light .sb-empty-compact { background:rgba(236,72,153,0.04) !important; border-color:rgba(236,72,153,0.22) !important; }
     </style>
 </head>
 <body class="h-[100dvh] flex flex-col relative overflow-hidden">
@@ -987,6 +976,33 @@ fontFamily: {
                 </div>
             </div>
 
+            <!-- ═══════════ STORYBOARD SIDEBAR PANEL (compact) ═══════════ -->
+            <div class="panel-s" id="storyboard-panel" style="display:none;padding-top:0">
+                <div class="sb-head">
+                    <label class="field-label" style="margin:0;display:flex;align-items:center;gap:7px">
+                        <i class="fa-solid fa-clapperboard" style="color:rgba(244,114,182,0.85);font-size:0.75rem"></i>
+                        Scene Storyboard
+                        <span class="sb-new-badge">NOU</span>
+                    </label>
+                    <div class="sb-head-stats">
+                        <span class="sb-mini-stat"><i class="fa-solid fa-layer-group"></i><span id="scenes-counter">0</span></span>
+                        <span class="sb-mini-stat" id="scenes-dur-pill"><i class="fa-solid fa-clock"></i><span id="scenes-total-dur">0s/45s</span></span>
+                    </div>
+                </div>
+
+                <div id="scenes-list"></div>
+                <div id="scenes-empty" class="sb-empty-compact">
+                    <div class="sb-empty-icon-sm">🎬</div>
+                    <div class="sb-empty-txt-sm">Încă nicio scenă</div>
+                    <div class="sb-empty-sub-sm">Minim 2 scene · max 10 · max 45s total · 2 credite/scenă</div>
+                </div>
+
+                <div class="sb-actions-row">
+                    <button id="sb-clear-btn" onclick="clearAllScenes()" class="sb-clear-btn"><i class="fa-solid fa-trash-can" style="font-size:0.6rem"></i> Șterge toate</button>
+                    <button onclick="openSceneModal()" class="sb-add-btn-compact"><i class="fa-solid fa-plus" style="font-size:0.68rem"></i> Adaugă scenă</button>
+                </div>
+            </div>
+
             <!-- IMAGE OPTIONS -->
             <div id="img-options">
                 <div class="panel-s pt-0">
@@ -1193,51 +1209,6 @@ fontFamily: {
             </div>
 
             <div id="jobs-area" class="w-full"></div>
-
-            <!-- ═══════════ STORYBOARD PANEL (Grok multi-scenă) ═══════════ -->
-            <div id="storyboard-panel" class="sb-panel" style="display:none">
-                <div class="sb-header">
-                    <div class="sb-title">
-                        <div class="sb-title-icon">🎬</div>
-                        <div class="sb-title-txt">
-                            <div class="sb-title-main">
-                                Grok Storyboard
-                                <span class="sb-new-badge">NOU</span>
-                            </div>
-                            <div class="sb-title-sub">Creează un video multi-scenă · fiecare scenă se leagă automat de precedenta</div>
-                        </div>
-                    </div>
-                    <div class="sb-stats">
-                        <span class="sb-stat"><i class="fa-solid fa-layer-group"></i> <span id="scenes-counter">0 scene</span></span>
-                        <span class="sb-stat"><i class="fa-solid fa-clock"></i> <span id="scenes-total-dur">0s / 45s</span></span>
-                    </div>
-                </div>
-
-                <div class="sb-table-wrap">
-                    <table class="sb-table">
-                        <thead>
-                            <tr>
-                                <th class="th-num">#</th>
-                                <th>Prompt</th>
-                                <th class="th-dur">Durată</th>
-                                <th class="th-mode">Mod</th>
-                                <th class="th-actions">Acțiuni</th>
-                            </tr>
-                        </thead>
-                        <tbody id="scenes-tbody"></tbody>
-                    </table>
-                    <div id="scenes-empty" class="sb-empty">
-                        <div class="sb-empty-icon">🎬</div>
-                        <div class="sb-empty-txt">Încă nicio scenă</div>
-                        <div class="sb-empty-sub">Apasă <strong style="color:rgba(244,114,182,0.9)">+ Adaugă scenă</strong> pentru a construi storyboard-ul. Ai nevoie de minim 2 scene (max 10), maxim 45s total. Fiecare scenă costă 2 credite.</div>
-                    </div>
-                </div>
-
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;flex-wrap:wrap">
-                    <button id="sb-clear-btn" onclick="clearAllScenes()" class="sb-clear-btn"><i class="fa-solid fa-trash-can" style="font-size:0.6rem"></i> Șterge toate</button>
-                    <button onclick="openSceneModal()" class="sb-add-btn"><i class="fa-solid fa-plus" style="font-size:0.7rem"></i> Adaugă scenă</button>
-                </div>
-            </div>
 
             <!-- HISTORY -->
             <div class="w-full mt-auto pt-8 pb-4" style="border-top:1px solid rgba(255,255,255,0.04)">
