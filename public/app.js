@@ -8,15 +8,15 @@ const MODEL_META = {
     'grok-720p-10s':{ type:'video', cost:2 },
     'grok-extend':  { type:'video', cost:2 },
     // Kling & Seedance — cost PER SECUNDĂ × durata selectată
-    'kling-3-0-720p':         { type:'video', crPerSec:4,  durRange:[3,15] },
-    'kling-3-0-1080p':        { type:'video', crPerSec:5,  durRange:[3,15] },
-    'kling-2-6-720p':         { type:'video', crPerSec:2,  durRange:[5,10], fixedDurs:[5,10] },
-    'kling-2-6-1080p':        { type:'video', crPerSec:4,  durRange:[5,10], fixedDurs:[5,10] },
-    'kling-motion-3-720p':    { type:'video', crPerSec:4,  durRange:[5,15], motion:true },
-    'kling-motion-3-1080p':   { type:'video', crPerSec:7,  durRange:[5,15], motion:true },
-    'kling-motion-2-6-720p':  { type:'video', crPerSec:3,  durRange:[5,15], motion:true },
-    'kling-motion-2-6-1080p': { type:'video', crPerSec:4,  durRange:[5,15], motion:true },
-    'seedance-fast-480p':     { type:'video', crPerSec:5,  durRange:[4,15] },
+    'kling-3-0-720p':         { type:'video', crPerSec: 16,  durRange:[3,15] },
+    'kling-3-0-1080p':        { type:'video', crPerSec: 20,  durRange:[3,15] },
+    'kling-2-6-720p':         { type:'video', crPerSec: 10,  durRange:[5,10], fixedDurs:[5,10] },
+    'kling-2-6-1080p':        { type:'video', crPerSec: 16,  durRange:[5,10], fixedDurs:[5,10] },
+    'kling-motion-3-720p':    { type:'video', crPerSec: 16,  durRange:[5,15], motion:true },
+    'kling-motion-3-1080p':   { type:'video', crPerSec: 26,  durRange:[5,15], motion:true },
+    'kling-motion-2-6-720p':  { type:'video', crPerSec: 10,  durRange:[5,15], motion:true },
+    'kling-motion-2-6-1080p': { type:'video', crPerSec: 15,  durRange:[5,15], motion:true },
+    'seedance-fast-480p':     { type:'video', crPerSec: 20,  durRange:[4,15] },
 };
 let mode = 'image';
 let imgCount = 1;
