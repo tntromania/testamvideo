@@ -7,16 +7,21 @@ const MODEL_META = {
     'grok-720p-6s': { type:'video', cost:2 },
     'grok-720p-10s':{ type:'video', cost:2 },
     'grok-extend':  { type:'video', cost:2 },
-    // Kling & Seedance — cost PER SECUNDĂ × durata selectată
-    'kling-3-0-720p':         { type:'video', crPerSec: 16,  durRange:[3,15] },
-    'kling-3-0-1080p':        { type:'video', crPerSec: 20,  durRange:[3,15] },
-    'kling-2-6-720p':         { type:'video', crPerSec: 10,  durRange:[5,10], fixedDurs:[5,10] },
-    'kling-2-6-1080p':        { type:'video', crPerSec: 16,  durRange:[5,10], fixedDurs:[5,10] },
-    'kling-motion-3-720p':    { type:'video', crPerSec: 16,  durRange:[5,15], motion:true },
-    'kling-motion-3-1080p':   { type:'video', crPerSec: 26,  durRange:[5,15], motion:true },
-    'kling-motion-2-6-720p':  { type:'video', crPerSec: 10,  durRange:[5,15], motion:true },
-    'kling-motion-2-6-1080p': { type:'video', crPerSec: 15,  durRange:[5,15], motion:true },
-    'seedance-fast-480p':     { type:'video', crPerSec: 20,  durRange:[4,15] },
+    // ── Kling 3.0 per-second (10/12 cr/s) ──────────────────────────
+    'kling-3-0-720p':          { type:'video', crPerSec: 10, durRange:[3,15] },
+    'kling-3-0-1080p':         { type:'video', crPerSec: 12, durRange:[3,15] },
+    // ── Kling 2.6 tiered (fixed 5s/10s) ─────────────────────────────
+    'kling-2-6-720p':          { type:'video', durCosts:{5:30,10:60},   fixedDurs:[5,10] },
+    'kling-2-6-1080p':         { type:'video', durCosts:{5:60,10:100},  fixedDurs:[5,10] },
+    'kling-2-6-1080p-audio':   { type:'video', durCosts:{5:70,10:140},  fixedDurs:[5,10] },
+    // ── Motion Control flat ──────────────────────────────────────────
+    'kling-motion-3-720p':     { type:'video', flatCost: 50, motion:true },
+    'kling-motion-3-1080p':    { type:'video', flatCost: 80, motion:true },
+    'kling-motion-2-6-720p':   { type:'video', flatCost: 30, motion:true },
+    'kling-motion-2-6-1080p':  { type:'video', flatCost: 45, motion:true },
+    // ── Seedance per-second ──────────────────────────────────────────
+    'seedance-fast-480p':      { type:'video', crPerSec: 12, durRange:[4,15] },
+    'seedance-fast-720p':      { type:'video', crPerSec: 19, durRange:[4,15] },
 };
 let mode = 'image';
 let imgCount = 1;
@@ -69,8 +74,10 @@ window.onload = async () => {
         document.getElementById('og-vid').style.display = '';
         document.getElementById('og-grok').style.display = '';
         document.getElementById('og-kling').style.display = '';
+        document.getElementById('og-kling-2-6').style.display = '';
         document.getElementById('og-kling-motion').style.display = '';
         document.getElementById('og-seedance').style.display = '';
+        updateKlingOptions();
         document.getElementById('model-sel').value = 'grok-720p-6s';
         updateModelEtaChip();
         document.getElementById('img-options').classList.add('hidden');
@@ -98,18 +105,25 @@ function fillExample(){ document.getElementById('prompt-in').value='A cinematic 
 function updateCount(d){ imgCount=Math.min(4,Math.max(1,imgCount+d)); document.getElementById('count-val').textContent=imgCount; refreshBadges(); }
 function updateVCount(d){ vidCount=Math.min(4,Math.max(1,vidCount+d)); document.getElementById('vcount-val').textContent=vidCount; refreshBadges(); }
 
+function computeKlingCost(m, dur) {
+    if (m.flatCost !== undefined) return m.flatCost;
+    if (m.durCosts) {
+        const fds = m.fixedDurs || [5];
+        const near = fds.reduce((p,c) => Math.abs(c-dur)<Math.abs(p-dur)?c:p);
+        return m.durCosts[near] || 0;
+    }
+    if (m.crPerSec) return m.crPerSec * Math.min(Math.max(dur, m.durRange[0]), m.durRange[1]);
+    return 0;
+}
 function refreshBadges(){
     const sel = document.getElementById('model-sel');
     const modelId = sel?.value || '';
     const m = MODEL_META[modelId]||{type:'image',cost:1};
     const n = mode==='image'?imgCount:vidCount;
     let cost;
-    if (m.crPerSec) {
-        // Kling/Seedance: per-second pricing
-        const effDur = m.fixedDurs
-            ? (vidDuration <= 7 ? 5 : 10)
-            : Math.min(Math.max(vidDuration, m.durRange[0]), m.durRange[1]);
-        cost = m.crPerSec * effDur * n;
+    const isPremium2 = m.crPerSec !== undefined || m.durCosts !== undefined || m.flatCost !== undefined;
+    if (isPremium2) {
+        cost = computeKlingCost(m, vidDuration) * n;
     } else {
         cost = (m.cost || 2) * n;
     }
@@ -128,9 +142,9 @@ function updateModelEtaChip(){
     } else if(modelId.startsWith('veo')){
         chip.style.display = 'flex';
         chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">${modelId==='veo-extend'?'🔗':'⏳'}</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(167,139,250,0.9);letter-spacing:0.02em">1–2 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${modelId==='veo-extend'?'Veo Extend · continuă video':'servere aglomerate'}</span></div></div>`;
-    } else if(modelId.startsWith('kling-') || modelId === 'seedance-fast-480p'){
+    } else if(modelId.startsWith('kling-') || modelId.startsWith('seedance-fast-')){
         const isMotion = modelId.includes('motion');
-        const isSeedance = modelId === 'seedance-fast-480p';
+        const isSeedance = modelId.startsWith('seedance-fast-');
         const klingLabel = isSeedance ? 'Seedance · Bytedance AI video' : isMotion ? 'Motion Control · video de referință necesar' : modelId.includes('3-0') ? 'Kling 3.0 · calitate premium' : 'Kling 2.6 · calitate superioară';
         chip.style.display = 'flex';
         chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">${isMotion ? '🎥' : isSeedance ? '🌱' : '🎬'}</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(251,196,60,0.9);letter-spacing:0.02em">2–5 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${klingLabel}</span></div></div>`;
@@ -641,12 +655,12 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             else if (model_id === 'veo-extend' || model_id === 'grok-extend') statusMsg = 'Se trimite pentru extend video...';
             else if (_mMeta.motion && refVideoFile) statusMsg = `Se trimite Motion Control (${refVideoFile.name})...`;
             else if (_mMeta.motion) statusMsg = 'Motion Control — lipsă video referință!';
-            else if (_mMeta.crPerSec) statusMsg = `Se generează ${vidDuration}s...`;
+            else if (_mMeta.crPerSec || _mMeta.durCosts) statusMsg = `Se generează ${vidDuration}s${modelId.includes('audio')?'+audio':''}...`;
             setJobStatus(jobId, statusMsg);
             fd.append('prompt',promptText); fd.append('aspect_ratio',ratio); fd.append('number_of_videos',vidCount); fd.append('model_id',model_id);
             // Durata selectată pentru Kling/Seedance
             const _m = MODEL_META[model_id] || {};
-            if (_m.crPerSec) fd.append('duration', String(vidDuration));
+            if (_m.crPerSec || _m.durCosts) fd.append('duration', String(vidDuration));
             // Motion control: video de referință
             if (_m.motion && refVideoFile) fd.append('ref_video', refVideoFile, refVideoFile.name);
             if (startFrame) fd.append('start_image', startFrame, startFrame.name);
@@ -771,7 +785,8 @@ document.addEventListener('keydown', e => { if(e.key==='Escape' && document.getE
 function updateKlingOptions() {
     const modelId = document.getElementById('model-sel')?.value || '';
     const m = MODEL_META[modelId] || {};
-    const isKlingSeed = m.crPerSec !== undefined;
+    const isPremium = m.crPerSec !== undefined || m.durCosts !== undefined || m.flatCost !== undefined;
+    const hasDuration = isPremium && m.flatCost === undefined;
     const isMotion = m.motion === true;
 
     const durSection = document.getElementById('kling-dur-section');
@@ -779,8 +794,8 @@ function updateKlingOptions() {
     const frameSection = document.querySelector('.frames-section');
 
     if (durSection) {
-        durSection.style.display = isKlingSeed ? '' : 'none';
-        if (isKlingSeed) renderDurationBtns(modelId, m);
+        durSection.style.display = hasDuration ? '' : 'none';
+        if (hasDuration) renderDurationBtns(modelId, m);
     }
     if (motionSection) motionSection.style.display = isMotion ? '' : 'none';
     if (frameSection)  frameSection.style.display  = isMotion ? 'none' : '';
@@ -795,14 +810,15 @@ function renderDurationBtns(modelId, m) {
     let durs = [];
     if (m.fixedDurs) {
         durs = m.fixedDurs;
-    } else {
+    } else if (m.durRange) {
         const [min, max] = m.durRange;
         for (let i = min; i <= max; i++) durs.push(i);
     }
+    if (!durs.length) durs = [5];
 
-    // Clamp vidDuration to valid range
+    // Clamp vidDuration to valid options
     if (!durs.includes(vidDuration)) {
-        vidDuration = durs[0];
+        vidDuration = durs.reduce((p,c) => Math.abs(c-vidDuration)<Math.abs(p-vidDuration)?c:p);
     }
 
     container.innerHTML = durs.map(d => {
@@ -810,7 +826,8 @@ function renderDurationBtns(modelId, m) {
         const style = isActive
             ? 'background:rgba(251,146,60,0.2);border:1.5px solid rgba(251,146,60,0.5);color:rgba(251,196,60,0.95)'
             : 'background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)';
-        return `<button onclick="selectDuration(${d})" style="padding:5px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;${style}">${d}s</button>`;
+        const btnCost = m.durCosts ? m.durCosts[d] : (m.crPerSec ? m.crPerSec*d : '?');
+        return `<button onclick="selectDuration(${d})" style="padding:5px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;${style}" title="${btnCost} credite">${d}s <span style="font-size:0.55rem;opacity:0.7">${btnCost}cr</span></button>`;
     }).join('');
 }
 

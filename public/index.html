@@ -839,20 +839,24 @@
                             <option value="grok-720p-6s" data-type="video" data-cost="2">Grok 3 · 720p · 6s ⚡ — 2 Credite</option>
                             <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
                         </optgroup>
-                        <optgroup label="🎬 Kling AI — Text to Video" id="og-kling" style="display:none">
-                            <option value="kling-2-6-720p"  data-type="video">Kling 2.6 · 720p · 5s/10s</option>
-                            <option value="kling-2-6-1080p" data-type="video">Kling 2.6 · 1080p · 5s/10s 💎</option>
-                            <option value="kling-3-0-720p"  data-type="video">Kling 3.0 · 720p · 3–15s 🏆</option>
-                            <option value="kling-3-0-1080p" data-type="video">Kling 3.0 · 1080p · 3–15s 💎🏆</option>
+                        <optgroup label="🎬 Kling 3.0 — Text to Video" id="og-kling" style="display:none">
+                            <option value="kling-3-0-720p"  data-type="video">Kling 3.0 · 720p · 3–15s 🏆 (10 cr/s)</option>
+                            <option value="kling-3-0-1080p" data-type="video">Kling 3.0 · 1080p · 3–15s 💎 (12 cr/s)</option>
+                        </optgroup>
+                        <optgroup label="🎬 Kling 2.6 — Text to Video" id="og-kling-2-6" style="display:none">
+                            <option value="kling-2-6-720p"        data-type="video">Kling 2.6 · 720p · 5s/10s (30/60 cr)</option>
+                            <option value="kling-2-6-1080p"       data-type="video">Kling 2.6 · 1080p · 5s/10s 💎 (60/100 cr)</option>
+                            <option value="kling-2-6-1080p-audio" data-type="video">Kling 2.6 · 1080p + Audio 🎵 (70/140 cr)</option>
                         </optgroup>
                         <optgroup label="🎥 Kling Motion Control" id="og-kling-motion" style="display:none">
-                            <option value="kling-motion-2-6-720p"  data-type="video">Kling 2.6 Motion · 720p</option>
-                            <option value="kling-motion-2-6-1080p" data-type="video">Kling 2.6 Motion · 1080p 💎</option>
-                            <option value="kling-motion-3-720p"    data-type="video">Kling 3.0 Motion · 720p 🏆</option>
-                            <option value="kling-motion-3-1080p"   data-type="video">Kling 3.0 Motion · 1080p 💎🏆</option>
+                            <option value="kling-motion-2-6-720p"  data-type="video">Kling 2.6 Motion · 720p — 30 cr</option>
+                            <option value="kling-motion-2-6-1080p" data-type="video">Kling 2.6 Motion · 1080p 💎 — 45 cr</option>
+                            <option value="kling-motion-3-720p"    data-type="video">Kling 3.0 Motion · 720p 🏆 — 50 cr</option>
+                            <option value="kling-motion-3-1080p"   data-type="video">Kling 3.0 Motion · 1080p 💎🏆 — 80 cr</option>
                         </optgroup>
-                        <optgroup label="🌱 Bytedance Seedance" id="og-seedance" style="display:none">
-                            <option value="seedance-fast-480p" data-type="video">Seedance 2 Fast · 480p · 4–15s ⚡</option>
+                        <optgroup label="🌱 Bytedance Seedance 2 Fast" id="og-seedance" style="display:none">
+                            <option value="seedance-fast-480p" data-type="video">Seedance Fast · 480p · 4–15s ⚡ (12 cr/s)</option>
+                            <option value="seedance-fast-720p" data-type="video">Seedance Fast · 720p · 4–15s 💎 (19 cr/s)</option>
                         </optgroup>
                     </select>
                 </div>
@@ -906,9 +910,12 @@
                 <div class="panel-s pt-0">
                     <label class="field-label">Format Video</label>
                     <div class="rounded-xl p-1.5 grid grid-cols-3 gap-1.5" style="background:rgba(255,255,255,0.03)">
-                        <label class="ratio-pill"><input type="radio" name="vratio" value="9:16" checked><span><div class="w-[9px] h-[17px] border-[2px] border-current rounded-[2px] opacity-60"></div>9:16</span></label>
-                        <label class="ratio-pill"><input type="radio" name="vratio" value="16:9"><span><div class="w-[17px] h-[9px] border-[2px] border-current rounded-[2px] opacity-60"></div>16:9</span></label>
+                        <label class="ratio-pill"><input type="radio" name="vratio" value="16:9" checked><span><div class="w-[17px] h-[9px] border-[2px] border-current rounded-[2px] opacity-60"></div>16:9</span></label>
+                        <label class="ratio-pill"><input type="radio" name="vratio" value="9:16"><span><div class="w-[9px] h-[17px] border-[2px] border-current rounded-[2px] opacity-60"></div>9:16</span></label>
                         <label class="ratio-pill"><input type="radio" name="vratio" value="1:1"><span><div class="w-[13px] h-[13px] border-[2px] border-current rounded-[2px] opacity-60"></div>1:1</span></label>
+                        <label class="ratio-pill"><input type="radio" name="vratio" value="3:4"><span><div class="w-[11px] h-[15px] border-[2px] border-current rounded-[2px] opacity-60"></div>3:4</span></label>
+                        <label class="ratio-pill"><input type="radio" name="vratio" value="4:3"><span><div class="w-[15px] h-[11px] border-[2px] border-current rounded-[2px] opacity-60"></div>4:3</span></label>
+                        <label class="ratio-pill"><input type="radio" name="vratio" value="21:9"><span><div class="w-[21px] h-[7px] border-[2px] border-current rounded-[2px] opacity-60"></div>21:9</span></label>
                     </div>
                 </div>
                 <div class="panel-s pt-0">
