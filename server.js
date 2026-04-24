@@ -214,25 +214,27 @@ const MODEL_PRICES = {
     'grok-extend': 2,
 };
 
-// Kling & Seedance — 100 RON = 400 cr platformă = 5000 cr API → 1 cr platf. = 12.5 cr API
-// Prețuri exacte comunicate de operator (includ profit 10-40% vs API cost)
-// Structuri: crPerSec × dur | durCosts[5|10] | flatCost (motion)
+// ══ Viralio Credit Pricing ══════════════════════════════════════════
+// Baza: Agency 1cr=0.167RON | Pro 1cr=0.25RON | Starter 1cr=0.333RON
+// API:  100RON = 5000 GG credite → 1 GG cr = 0.02 RON
+// Țintă: Agency ~0-10% | Pro ~33-40% | Starter ~50-55%
+// crPerSec poate fi float — costul final = Math.round(crPerSec × durata)
 const KLING_CONFIGS = {
-    // ── Kling 3.0 Text-to-Video (per secundă, 3–15s) ─────────────────
-    'kling-3-0-720p':          { apiModel: 'kling-video-3-0',      kMode: 'standard',          crPerSec: 10, durRange: [3, 15] },
-    'kling-3-0-1080p':         { apiModel: 'kling-video-3-0',      kMode: 'professional',      crPerSec: 12, durRange: [3, 15] },
-    // ── Kling 2.6 Text-to-Video (fix: 5s sau 10s, prețuri tiered) ────
-    'kling-2-6-720p':          { apiModel: 'kling-video-2-6',      kMode: 'standard',          durCosts: {5: 30, 10: 60},   fixedDurs: [5, 10] },
-    'kling-2-6-1080p':         { apiModel: 'kling-video-2-6',      kMode: 'professional',      durCosts: {5: 60, 10: 100},  fixedDurs: [5, 10] },
-    'kling-2-6-1080p-audio':   { apiModel: 'kling-video-2-6',      kMode: 'professional_audio',durCosts: {5: 70, 10: 140},  fixedDurs: [5, 10] },
-    // ── Kling Motion Control (flat per generare — durata = video ref) ─
-    'kling-motion-3-720p':     { apiModel: 'kling-video-motion-3', kMode: 'standard',          flatCost: 50, motion: true },
-    'kling-motion-3-1080p':    { apiModel: 'kling-video-motion-3', kMode: 'professional',      flatCost: 80, motion: true },
-    'kling-motion-2-6-720p':   { apiModel: 'kling-video-motion',   kMode: 'standard',          flatCost: 30, motion: true },
-    'kling-motion-2-6-1080p':  { apiModel: 'kling-video-motion',   kMode: 'professional',      flatCost: 45, motion: true },
-    // ── Seedance Fast (per secundă, 4–15s) ───────────────────────────
-    'seedance-fast-480p':      { apiModel: 'bytedance-seedance-2-fast', kMode: null, crPerSec: 12, durRange: [4, 15] },
-    'seedance-fast-720p':      { apiModel: 'bytedance-seedance-2-fast', kMode: null, crPerSec: 19, durRange: [4, 15] },
+    // ── Kling 3.0 — per secundă (3–15s) ─────────────────────────────
+    'kling-3-0-720p':          { apiModel: 'kling-video-3-0',      kMode: 'standard',          crPerSec: 1.2, durRange: [3, 15] },
+    'kling-3-0-1080p':         { apiModel: 'kling-video-3-0',      kMode: 'professional',      crPerSec: 1.5, durRange: [3, 15] },
+    // ── Kling 2.6 — prețuri fixe 5s/10s ─────────────────────────────
+    'kling-2-6-720p':          { apiModel: 'kling-video-2-6',      kMode: 'standard',          durCosts: {5: 4, 10: 8},   fixedDurs: [5, 10] },
+    'kling-2-6-1080p':         { apiModel: 'kling-video-2-6',      kMode: 'professional',      durCosts: {5: 6, 10: 12},  fixedDurs: [5, 10] },
+    'kling-2-6-1080p-audio':   { apiModel: 'kling-video-2-6',      kMode: 'professional_audio',durCosts: {5: 9, 10: 17},  fixedDurs: [5, 10] },
+    // ── Motion Control — FLAT per generare (GeminiGen taxează fix indiferent de durată) ─
+    'kling-motion-3-720p':     { apiModel: 'kling-video-motion-3', kMode: 'standard',          flatCost: 6,  motion: true },
+    'kling-motion-3-1080p':    { apiModel: 'kling-video-motion-3', kMode: 'professional',      flatCost: 10, motion: true },
+    'kling-motion-2-6-720p':   { apiModel: 'kling-video-motion',   kMode: 'standard',          flatCost: 4,  motion: true },
+    'kling-motion-2-6-1080p':  { apiModel: 'kling-video-motion',   kMode: 'professional',      flatCost: 6,  motion: true },
+    // ── Seedance 2 Fast — per secundă (4–15s) ────────────────────────
+    'seedance-fast-480p':      { apiModel: 'bytedance-seedance-2-fast', kMode: null, crPerSec: 1.5, durRange: [4, 15] },
+    'seedance-fast-720p':      { apiModel: 'bytedance-seedance-2-fast', kMode: null, crPerSec: 2.5, durRange: [4, 15] },
 };
 
 const fetchWithRetry = async (url, options, maxRetries = 6, delayMs = 5000) => {
@@ -644,7 +646,10 @@ app.post('/api/media/video',
                     const nearDur = (cfg.fixedDurs || [5]).reduce((p,c) => Math.abs(c-dur)<Math.abs(p-dur)?c:p);
                     return cfg.durCosts[nearDur] || cfg.durCosts[cfg.fixedDurs[0]];
                 }
-                if (cfg.crPerSec) return cfg.crPerSec * Math.min(Math.max(dur, cfg.durRange[0]), cfg.durRange[1]);
+                if (cfg.crPerSec) {
+                    const effDur = Math.min(Math.max(dur, cfg.durRange[0]), cfg.durRange[1]);
+                    return Math.max(1, Math.round(cfg.crPerSec * effDur));
+                }
                 return 2;
             }
             const costPerVid = klingCostPerVid(klingCfg, reqDuration);
