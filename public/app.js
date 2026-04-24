@@ -7,21 +7,21 @@ const MODEL_META = {
     'grok-720p-6s': { type:'video', cost:2 },
     'grok-720p-10s':{ type:'video', cost:2 },
     'grok-extend':  { type:'video', cost:2 },
-    // ── Kling 3.0 per-second (10/12 cr/s) ──────────────────────────
-    'kling-3-0-720p':          { type:'video', crPerSec: 10, durRange:[3,15] },
-    'kling-3-0-1080p':         { type:'video', crPerSec: 12, durRange:[3,15] },
-    // ── Kling 2.6 tiered (fixed 5s/10s) ─────────────────────────────
-    'kling-2-6-720p':          { type:'video', durCosts:{5:30,10:60},   fixedDurs:[5,10] },
-    'kling-2-6-1080p':         { type:'video', durCosts:{5:60,10:100},  fixedDurs:[5,10] },
-    'kling-2-6-1080p-audio':   { type:'video', durCosts:{5:70,10:140},  fixedDurs:[5,10] },
-    // ── Motion Control flat ──────────────────────────────────────────
-    'kling-motion-3-720p':     { type:'video', flatCost: 50, motion:true },
-    'kling-motion-3-1080p':    { type:'video', flatCost: 80, motion:true },
-    'kling-motion-2-6-720p':   { type:'video', flatCost: 30, motion:true },
-    'kling-motion-2-6-1080p':  { type:'video', flatCost: 45, motion:true },
-    // ── Seedance per-second ──────────────────────────────────────────
-    'seedance-fast-480p':      { type:'video', crPerSec: 12, durRange:[4,15] },
-    'seedance-fast-720p':      { type:'video', crPerSec: 19, durRange:[4,15] },
+    // ── Kling 3.0 per-second (1.2/1.5 cr/s) ────────────────────────
+    'kling-3-0-720p':          { type:'video', crPerSec: 1.2, durRange:[3,15] },
+    'kling-3-0-1080p':         { type:'video', crPerSec: 1.5, durRange:[3,15] },
+    // ── Kling 2.6 prețuri fixe 5s/10s ───────────────────────────────
+    'kling-2-6-720p':          { type:'video', durCosts:{5:4,10:8},   fixedDurs:[5,10] },
+    'kling-2-6-1080p':         { type:'video', durCosts:{5:6,10:12},  fixedDurs:[5,10] },
+    'kling-2-6-1080p-audio':   { type:'video', durCosts:{5:9,10:17},  fixedDurs:[5,10] },
+    // ── Motion Control — FLAT per generare ──────────────────────────
+    'kling-motion-3-720p':     { type:'video', flatCost: 6,  motion:true },
+    'kling-motion-3-1080p':    { type:'video', flatCost: 10, motion:true },
+    'kling-motion-2-6-720p':   { type:'video', flatCost: 4,  motion:true },
+    'kling-motion-2-6-1080p':  { type:'video', flatCost: 6,  motion:true },
+    // ── Seedance 2 Fast — per secundă ───────────────────────────────
+    'seedance-fast-480p':      { type:'video', crPerSec: 1.5, durRange:[4,15] },
+    'seedance-fast-720p':      { type:'video', crPerSec: 2.5, durRange:[4,15] },
 };
 let mode = 'image';
 let imgCount = 1;
@@ -112,7 +112,12 @@ function computeKlingCost(m, dur) {
         const near = fds.reduce((p,c) => Math.abs(c-dur)<Math.abs(p-dur)?c:p);
         return m.durCosts[near] || 0;
     }
-    if (m.crPerSec) return m.crPerSec * Math.min(Math.max(dur, m.durRange[0]), m.durRange[1]);
+    if (m.crPerSec) {
+        const effDur = m.durRange
+            ? Math.min(Math.max(dur, m.durRange[0]), m.durRange[1])
+            : dur;
+        return Math.max(1, Math.round(m.crPerSec * effDur));
+    }
     return 0;
 }
 function refreshBadges(){
@@ -786,7 +791,7 @@ function updateKlingOptions() {
     const modelId = document.getElementById('model-sel')?.value || '';
     const m = MODEL_META[modelId] || {};
     const isPremium = m.crPerSec !== undefined || m.durCosts !== undefined || m.flatCost !== undefined;
-    const hasDuration = isPremium && m.flatCost === undefined;
+        const hasDuration = isPremium && m.flatCost === undefined; // flatCost (motion) → no dur selector
     const isMotion = m.motion === true;
 
     const durSection = document.getElementById('kling-dur-section');
@@ -826,7 +831,7 @@ function renderDurationBtns(modelId, m) {
         const style = isActive
             ? 'background:rgba(251,146,60,0.2);border:1.5px solid rgba(251,146,60,0.5);color:rgba(251,196,60,0.95)'
             : 'background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)';
-        const btnCost = m.durCosts ? m.durCosts[d] : (m.crPerSec ? m.crPerSec*d : '?');
+        const btnCost = m.durCosts ? m.durCosts[d] : (m.crPerSec ? Math.max(1, Math.round(m.crPerSec*d)) : '?');
         return `<button onclick="selectDuration(${d})" style="padding:5px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;${style}" title="${btnCost} credite">${d}s <span style="font-size:0.55rem;opacity:0.7">${btnCost}cr</span></button>`;
     }).join('');
 }
@@ -849,14 +854,38 @@ function handleRefVideoSelect(e) {
     if (zone) zone.style.display = 'none';
     if (previewEl) previewEl.style.display = 'flex';
     e.target.value = '';
+
+    // Auto-detectează durata videoclipului de referință
+    const url = URL.createObjectURL(file);
+    const tmpVid = document.createElement('video');
+    tmpVid.preload = 'metadata';
+    tmpVid.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        const detectedDur = Math.ceil(tmpVid.duration) || 5;
+        vidDuration = detectedDur;
+        // Actualizează costul estimat în UI
+        const costEl = document.getElementById('ref-video-cost');
+        const modelId = document.getElementById('model-sel')?.value || '';
+        const m = MODEL_META[modelId] || {};
+        if (costEl && m.crPerSec) {
+            const estCost = computeKlingCost(m, detectedDur);
+            costEl.textContent = `~${estCost} credite (${detectedDur}s detectat)`;
+        }
+        refreshBadges();
+    };
+    tmpVid.src = url;
 }
 
 function removeRefVideo() {
     refVideoFile = null;
+    vidDuration = 5;
     const zone = document.getElementById('ref-video-zone');
     const previewEl = document.getElementById('ref-video-preview');
+    const costEl = document.getElementById('ref-video-cost');
     if (zone) zone.style.display = '';
     if (previewEl) previewEl.style.display = 'none';
+    if (costEl) costEl.textContent = '';
+    refreshBadges();
 }
 
 // ===================== GENERATE =====================
