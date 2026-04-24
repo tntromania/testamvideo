@@ -45,7 +45,7 @@ const PORT = process.env.PORT || 3001;
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024, files: 6 }
+    limits: { fileSize: 100 * 1024 * 1024, files: 6 }  // 100MB overall; motion ref capped at 50MB in code
 });
 
 app.use(cors({ origin: '*' }));
@@ -214,21 +214,25 @@ const MODEL_PRICES = {
     'grok-extend': 2,
 };
 
-// Kling & Seedance — credite PER SECUNDĂ (total = durata × crPerSec × count)
-// Bază: 100 RON = 5000 cr → 1 cr = $0.00435 | Marjă ~30% pe toate modelele
-// API costs: K3.0 720p=$0.05/s 1080p=$0.06/s | K2.6 720p=$0.03/s 1080p=$0.05/s
-//            MotionK3 720p=$0.05/s 1080p=$0.08/s | MotionK2.6 720p=$0.03/s 1080p=$0.045/s
-//            Seedance Fast 480p=$0.06/s
+// Kling & Seedance — 100 RON = 400 cr platformă = 5000 cr API → 1 cr platf. = 12.5 cr API
+// Prețuri exacte comunicate de operator (includ profit 10-40% vs API cost)
+// Structuri: crPerSec × dur | durCosts[5|10] | flatCost (motion)
 const KLING_CONFIGS = {
-    'kling-3-0-720p':         { apiModel: 'kling-video-3-0',      kMode: 'standard',     crPerSec: 16,  durRange: [3, 15] },
-    'kling-3-0-1080p':        { apiModel: 'kling-video-3-0',      kMode: 'professional', crPerSec: 20,  durRange: [3, 15] },
-    'kling-2-6-720p':         { apiModel: 'kling-video-2-6',      kMode: 'standard',     crPerSec: 10,  durRange: [5, 10], fixedDurs: [5, 10] },
-    'kling-2-6-1080p':        { apiModel: 'kling-video-2-6',      kMode: 'professional', crPerSec: 16,  durRange: [5, 10], fixedDurs: [5, 10] },
-    'kling-motion-3-720p':    { apiModel: 'kling-video-motion-3', kMode: 'standard',     crPerSec: 16,  durRange: [5, 15], motion: true },
-    'kling-motion-3-1080p':   { apiModel: 'kling-video-motion-3', kMode: 'professional', crPerSec: 26,  durRange: [5, 15], motion: true },
-    'kling-motion-2-6-720p':  { apiModel: 'kling-video-motion',   kMode: 'standard',     crPerSec: 10,  durRange: [5, 15], motion: true },
-    'kling-motion-2-6-1080p': { apiModel: 'kling-video-motion',   kMode: 'professional', crPerSec: 15,  durRange: [5, 15], motion: true },
-    'seedance-fast-480p':     { apiModel: 'bytedance-seedance-2-fast', kMode: 'fast',     crPerSec: 20,  durRange: [4, 15] },
+    // ── Kling 3.0 Text-to-Video (per secundă, 3–15s) ─────────────────
+    'kling-3-0-720p':          { apiModel: 'kling-video-3-0',      kMode: 'standard',          crPerSec: 10, durRange: [3, 15] },
+    'kling-3-0-1080p':         { apiModel: 'kling-video-3-0',      kMode: 'professional',      crPerSec: 12, durRange: [3, 15] },
+    // ── Kling 2.6 Text-to-Video (fix: 5s sau 10s, prețuri tiered) ────
+    'kling-2-6-720p':          { apiModel: 'kling-video-2-6',      kMode: 'standard',          durCosts: {5: 30, 10: 60},   fixedDurs: [5, 10] },
+    'kling-2-6-1080p':         { apiModel: 'kling-video-2-6',      kMode: 'professional',      durCosts: {5: 60, 10: 100},  fixedDurs: [5, 10] },
+    'kling-2-6-1080p-audio':   { apiModel: 'kling-video-2-6',      kMode: 'professional_audio',durCosts: {5: 70, 10: 140},  fixedDurs: [5, 10] },
+    // ── Kling Motion Control (flat per generare — durata = video ref) ─
+    'kling-motion-3-720p':     { apiModel: 'kling-video-motion-3', kMode: 'standard',          flatCost: 50, motion: true },
+    'kling-motion-3-1080p':    { apiModel: 'kling-video-motion-3', kMode: 'professional',      flatCost: 80, motion: true },
+    'kling-motion-2-6-720p':   { apiModel: 'kling-video-motion',   kMode: 'standard',          flatCost: 30, motion: true },
+    'kling-motion-2-6-1080p':  { apiModel: 'kling-video-motion',   kMode: 'professional',      flatCost: 45, motion: true },
+    // ── Seedance Fast (per secundă, 4–15s) ───────────────────────────
+    'seedance-fast-480p':      { apiModel: 'bytedance-seedance-2-fast', kMode: null, crPerSec: 12, durRange: [4, 15] },
+    'seedance-fast-720p':      { apiModel: 'bytedance-seedance-2-fast', kMode: null, crPerSec: 19, durRange: [4, 15] },
 };
 
 const fetchWithRetry = async (url, options, maxRetries = 6, delayMs = 5000) => {
@@ -450,10 +454,12 @@ const toGeminiGenAspect = (ratio, isGrok) => {
     return ['9:16','3:4','2:3','4:5'].includes(ratio) ? '9:16' : '16:9';
 };
 
-// Kling suportă exact: 16:9, 9:16, 1:1
+// Aspect ratio pentru Kling/Seedance
+// Kling nativ: 16:9, 9:16, 1:1 + Seedance mai acceptă 3:4, 4:3, 21:9
 const toKlingAspect = (ratio) => {
-    if (['9:16','3:4','4:5','2:3'].includes(ratio)) return '9:16';
-    if (ratio === '1:1') return '1:1';
+    const supported = ['16:9','9:16','1:1','3:4','4:3','21:9'];
+    if (supported.includes(ratio)) return ratio;
+    if (['4:5','2:3'].includes(ratio)) return '9:16';
     return '16:9';
 };
 
@@ -630,9 +636,18 @@ app.post('/api/media/video',
             // Per-second cost pentru Kling/Seedance, flat pentru Grok/Veo
             const klingCfg = KLING_CONFIGS[model_id];
             const reqDuration = parseInt(req.body.duration) || 5;
-            const costPerVid = klingCfg
-                ? klingCfg.crPerSec * reqDuration
-                : (MODEL_PRICES[model_id] || 2);
+            // Calculează costul per videoclip în funcție de tipul de pricing
+            function klingCostPerVid(cfg, dur) {
+                if (!cfg) return MODEL_PRICES[model_id] || 2;
+                if (cfg.flatCost !== undefined) return cfg.flatCost;
+                if (cfg.durCosts) {
+                    const nearDur = (cfg.fixedDurs || [5]).reduce((p,c) => Math.abs(c-dur)<Math.abs(p-dur)?c:p);
+                    return cfg.durCosts[nearDur] || cfg.durCosts[cfg.fixedDurs[0]];
+                }
+                if (cfg.crPerSec) return cfg.crPerSec * Math.min(Math.max(dur, cfg.durRange[0]), cfg.durRange[1]);
+                return 2;
+            }
+            const costPerVid = klingCostPerVid(klingCfg, reqDuration);
             const totalCost = count * costPerVid;
 
             const GEMINIGEN_API_KEY = process.env.GEMINIGEN_API_KEY;
@@ -658,13 +673,16 @@ app.post('/api/media/video',
                 const v = await validateImageForVideo(endImageFile.buffer, endImageFile.mimetype, 'end_image');
                 if (!v.valid) return sendError(`Imaginea de final are probleme: ${v.reason}. Te rugăm să folosești o altă imagine (JPEG/PNG, minim 128x128px).`);
             }
+            if (refVideoFile && refVideoFile.buffer.length > 50 * 1024 * 1024) {
+                return sendError('Videoclipul de referință depășește limita de 50MB. Te rugăm să comprimi videoclipul.');
+            }
 
             const emailTag = req.user.email;
             const isGrok = model_id.startsWith('grok-') && model_id !== 'grok-extend';
             const isGrokExtend = model_id === 'grok-extend';
             const isVeoExtend = model_id === 'veo-extend';
             const isVeo = model_id.startsWith('veo') && !isVeoExtend;
-            const isKling = model_id.startsWith('kling-') || model_id === 'seedance-fast-480p';
+            const isKling = model_id.startsWith('kling-') || model_id.startsWith('seedance-fast-');
 
             // ─── Determină endpoint și parametri ─────────────────────────
             let apiEndpoint, apiModel, resolution, duration, grokAspect, klingMode;
@@ -687,18 +705,23 @@ app.post('/api/media/video',
                 resolution = '1080p';
                 duration = 8;
                 grokAspect = toGeminiGenAspect(aspect_ratio, false);
-            } else if (klingCfg && model_id !== 'seedance-fast-480p') {
+            } else if (klingCfg && !model_id.startsWith('seedance-fast-')) {
                 // Kling AI
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/kling';
                 apiModel = klingCfg.apiModel;
                 klingMode = klingCfg.kMode;
-                // Kling 2.6: only 5s or 10s; others: 3-15s
-                const validDurs = klingCfg.fixedDurs || null;
-                duration = validDurs
-                    ? (reqDuration <= 7 ? 5 : 10)
-                    : Math.min(Math.max(reqDuration, klingCfg.durRange[0]), klingCfg.durRange[1]);
+                if (klingCfg.flatCost !== undefined) {
+                    // Motion control: duration din videoclipul de referință
+                    duration = reqDuration;
+                } else if (klingCfg.fixedDurs) {
+                    // Kling 2.6: 5s sau 10s
+                    duration = klingCfg.fixedDurs.reduce((p,c) => Math.abs(c-reqDuration)<Math.abs(p-reqDuration)?c:p);
+                } else {
+                    // Kling 3.0: 3-15s
+                    duration = Math.min(Math.max(reqDuration, klingCfg.durRange[0]), klingCfg.durRange[1]);
+                }
                 grokAspect = toKlingAspect(aspect_ratio);
-            } else if (model_id === 'seedance-fast-480p') {
+            } else if (model_id === 'seedance-fast-480p' || model_id === 'seedance-fast-720p') {
                 // Bytedance Seedance
                 apiEndpoint = 'https://api.geminigen.ai/uapi/v1/video-gen/seedance';
                 apiModel = 'bytedance-seedance-2-fast';
@@ -752,10 +775,11 @@ console.log(`[Video] START | model=${model_id} → api=${apiModel} res=${resolut
                             formData.append('resolution', resolution);
                         }
 
-                        if (model_id === 'seedance-fast-480p') {
-                            // ── Seedance: aspect_ratio, duration, opțional ref_images ──
+                        if (model_id.startsWith('seedance-fast-')) {
+                            // ── Seedance: aspect_ratio, duration, resolution, opțional ref_images ──
                             formData.append('aspect_ratio', grokAspect);
                             formData.append('duration', String(duration));
+                            formData.append('resolution', model_id.includes('720p') ? '720p' : '480p');
                             if (startImageFile) {
                                 const compressed = await compressForVideo(startImageFile.buffer, startImageFile.mimetype, 'kling');
                                 const blob = new Blob([compressed.buffer], { type: compressed.mimetype });
