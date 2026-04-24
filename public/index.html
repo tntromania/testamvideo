@@ -913,6 +913,27 @@ fontFamily: {
                     <div id="kling-dur-btns" class="flex flex-wrap gap-1.5"></div>
                 </div>
 
+                <!-- MOTION CONTROL — IMAGE DE REFERINȚĂ (personaj) -->
+                <div id="kling-motion-image-section" class="panel-s pt-0" style="display:none">
+                    <label class="field-label mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-user" style="color:rgba(165,168,255,0.7)"></i>
+                        Imagine Referință Personaj
+                        <span class="normal-case font-medium" style="color:rgba(255,255,255,0.35)">(recomandat)</span>
+                    </label>
+                    <p class="text-[0.62rem] mb-2 leading-relaxed" style="color:rgba(255,255,255,0.25)">Imagine clară, min. 1K rezoluție. AI-ul va copia personajul din ea.</p>
+                    <input type="file" id="motion-image-input" class="hidden" accept="image/*" onchange="handleMotionImageSelect(event)">
+                    <div id="motion-image-zone" class="dropzone flex flex-col items-center justify-center text-center p-4 min-h-[72px]" onclick="document.getElementById('motion-image-input').click()" style="border-color:rgba(165,168,255,0.3)">
+                        <i class="fa-solid fa-user mb-1.5" style="color:rgba(165,168,255,0.4);font-size:1.3rem"></i>
+                        <span class="text-[0.65rem] font-bold" style="color:rgba(165,168,255,0.6)">Încarcă imagine personaj</span>
+                        <span class="text-[0.58rem] mt-1" style="color:rgba(255,255,255,0.2)">JPG/PNG · min 1K · max 15MB</span>
+                    </div>
+                    <div id="motion-image-preview" class="items-center gap-3 px-3 py-2.5 rounded-xl" style="display:none;background:rgba(165,168,255,0.06);border:1px solid rgba(165,168,255,0.2)">
+                        <i class="fa-solid fa-user shrink-0" style="color:rgba(165,168,255,0.7)"></i>
+                        <span id="motion-image-name" class="flex-1 text-[0.7rem] font-bold truncate" style="color:rgba(255,255,255,0.6)">imagine.jpg</span>
+                        <button onclick="removeMotionImage()" style="width:22px;height:22px;border-radius:50%;background:rgba(239,68,68,0.8);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.5rem;flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
                 <!-- MOTION CONTROL — VIDEO DE REFERINȚĂ -->
                 <div id="kling-motion-section" class="panel-s pt-0" style="display:none">
                     <label class="field-label mb-3 flex items-center gap-2">

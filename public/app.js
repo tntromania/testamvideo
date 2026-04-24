@@ -31,6 +31,7 @@ let uploadedRefs = [];
 let startFrameFile = null;
 let endFrameFile   = null;
 let refVideoFile   = null;   // video de referință pentru Motion Control
+let motionImageFile = null;  // imagine de referință personaj pentru Motion Control
 let activeJobs = new Map();
 let jobCounter = 0;
 let lbMediaList = [], lbCurrentIndex = 0, lbCurrentType = 'image';
@@ -843,6 +844,8 @@ function updateKlingOptions() {
     }
     if (motionSection) motionSection.style.display = isMotion ? '' : 'none';
     if (frameSection)  frameSection.style.display  = isMotion ? 'none' : '';
+    const motionImgSection = document.getElementById('kling-motion-image-section');
+    if (motionImgSection) motionImgSection.style.display = isMotion ? '' : 'none';
 
     refreshBadges();
 }
@@ -926,6 +929,21 @@ function removeRefVideo() {
     refreshBadges();
 }
 
+function handleMotionImageSelect(e) {
+    const file = e.target.files[0]; if (!file) return;
+    motionImageFile = file;
+    document.getElementById('motion-image-name').textContent = file.name;
+    document.getElementById('motion-image-zone').style.display = 'none';
+    document.getElementById('motion-image-preview').style.display = 'flex';
+    e.target.value = '';
+}
+
+function removeMotionImage() {
+    motionImageFile = null;
+    document.getElementById('motion-image-zone').style.display = '';
+    document.getElementById('motion-image-preview').style.display = 'none';
+}
+
 // ===================== GENERATE =====================
 async function generate(){
     const token=getToken(); if(!token){ openLoginModal(); return; }
@@ -934,8 +952,10 @@ async function generate(){
     const currentMode=mode;
     const ratio=currentMode==='image'?(document.querySelector('input[name="ratio"]:checked')?.value||'9:16'):(document.querySelector('input[name="vratio"]:checked')?.value||'16:9');
     const refs=[...uploadedRefs];
-    const startFrame = currentMode==='video' ? startFrameFile : null;
-    const endFrame   = currentMode==='video' ? endFrameFile   : null;
+    const _activeModelId = document.getElementById('model-sel')?.value || '';
+    const _isMotionModel = _activeModelId.includes('motion');
+    const startFrame = currentMode==='video' ? (_isMotionModel ? motionImageFile : startFrameFile) : null;
+    const endFrame   = currentMode==='video' ? (_isMotionModel ? null : endFrameFile) : null;
     const jobId=++jobCounter;
     activeJobs.set(jobId,{aborted:false,reader:null});
     const count = currentMode==='image' ? imgCount : vidCount;
