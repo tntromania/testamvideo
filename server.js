@@ -172,7 +172,19 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 app.get('/api/auth/me', authenticate, async (req, res) => {
-    res.json({ user: req.user });
+    // ⚠️ Fetch soldul REAL direct de la HUB (nu din cache-ul local de 30s)
+    // — altfel UI-ul poate arăta credite vechi imediat după un job
+    try {
+        const fresh = await hubAPI.checkCredits(req.userId);
+        const user = { ...req.user };
+        if (fresh && typeof fresh.credits === 'number') user.credits = fresh.credits;
+        if (fresh && typeof fresh.voice_characters === 'number') user.voice_characters = fresh.voice_characters;
+        res.json({ user });
+    } catch (e) {
+        // Dacă HUB-ul e indisponibil temporar, returnăm ce știm din cache (mai bine decât eroare)
+        console.warn(`[auth/me] ⚠️ Nu am putut refresh credite de la HUB: ${e.message}`);
+        res.json({ user: req.user });
+    }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -417,7 +429,7 @@ app.post('/api/media/image', authenticate, upload.array('ref_images', 5), async 
         // Scădem creditele prin HUB — întotdeauna, chiar dacă clientul s-a deconectat
         const actualCost = urls.length * costPerImg;
         await Log.create({ userEmail: req.user.email, type: 'image', count: urls.length, cost: actualCost }).catch(() => {});
-        try { await hubAPI.useCredits(req.userId, actualCost); } catch (e) { console.error('Eroare scădere credite:', e.message); }
+        await safeUseCredits(req, actualCost, 'image-gen', urls.length);
 
         // ✅ Salvăm istoricul pe SERVER — întotdeauna (necesar pentru restore după refresh)
         try {
@@ -530,6 +542,38 @@ const isNonRetryableError = (msg) => {
            msg.includes('content moderation');
 };
 
+// ══════════════════════════════════════════════════════════════
+// ██ CREDIT SAFETY — single-commit guard + audit log
+// ══════════════════════════════════════════════════════════════
+// Garantează că pentru un request, useCredits e apelat o singură dată,
+// și doar dacă avem cel puțin un URL valid. Loghează totul pentru debug.
+const safeUseCredits = async (req, amount, context, validOutputsCount) => {
+    // Guard 1: flag per-request — nu se scad de 2 ori
+    if (req._creditsCommitted) {
+        console.warn(`[Credits] ⚠️ DOUBLE-COMMIT prevented! ctx=${context} uid=${req.userId} email=${req.user?.email} amount=${amount}`);
+        return { committed: false, reason: 'already_committed' };
+    }
+    // Guard 2: nu scădem niciodată dacă nu s-a generat nimic
+    if (!validOutputsCount || validOutputsCount <= 0) {
+        console.warn(`[Credits] ⚠️ REFUSED — no valid outputs! ctx=${context} uid=${req.userId} email=${req.user?.email} amount=${amount}`);
+        return { committed: false, reason: 'no_outputs' };
+    }
+    // Guard 3: suma trebuie să fie pozitivă
+    if (typeof amount !== 'number' || amount <= 0 || !Number.isFinite(amount)) {
+        console.warn(`[Credits] ⚠️ REFUSED — invalid amount! ctx=${context} uid=${req.userId} amount=${amount}`);
+        return { committed: false, reason: 'invalid_amount' };
+    }
+    try {
+        await hubAPI.useCredits(req.userId, amount);
+        req._creditsCommitted = true;
+        console.log(`[Credits] ✅ ${context} | -${amount} cr | uid=${req.userId} email=${req.user?.email} outputs=${validOutputsCount}`);
+        return { committed: true, amount };
+    } catch (e) {
+        console.error(`[Credits] ❌ FAILED to deduct ctx=${context} amount=${amount} uid=${req.userId}: ${e.message}`);
+        return { committed: false, reason: 'api_error', error: e.message };
+    }
+};
+
 // ── GeminiGen: Polling pe History API ────────────────────────────
 const pollGeminiGenResult = async (uuid, apiKey, emailTag, maxPolls = 90, intervalMs = 4000) => {
     for (let poll = 1; poll <= maxPolls; poll++) {
@@ -634,6 +678,19 @@ app.post('/api/media/video',
 
         try {
             const { prompt, aspect_ratio, number_of_videos, model_id } = req.body;
+
+            // ── Guard: modele indisponibile temporar (Kling + Seedance) ──
+            const DISABLED_MODELS = new Set([
+                'kling-3-0-720p', 'kling-3-0-1080p',
+                'kling-2-6-720p', 'kling-2-6-1080p', 'kling-2-6-1080p-audio',
+                'kling-motion-2-6-720p', 'kling-motion-2-6-1080p',
+                'kling-motion-3-720p', 'kling-motion-3-1080p',
+                'seedance-fast-480p', 'seedance-fast-720p',
+            ]);
+            if (DISABLED_MODELS.has(model_id)) {
+                return sendError('Acest model este temporar indisponibil. Folosește Grok sau Veo.');
+            }
+
             let finalPrompt = prompt;
             const count = parseInt(number_of_videos) || 1;
             // Per-second cost pentru Kling/Seedance, flat pentru Grok/Veo
@@ -972,7 +1029,7 @@ console.log(`[Video] START | model=${model_id} → api=${apiModel} res=${resolut
             // Scădem creditele — întotdeauna, chiar dacă clientul s-a deconectat (refresh)
             const actualCost = videoUrls.length * costPerVid;
             await Log.create({ userEmail: req.user.email, type: 'video', count: videoUrls.length, cost: actualCost }).catch(() => {});
-            try { await hubAPI.useCredits(req.userId, actualCost); } catch (e) { console.error('Eroare scădere credite video:', e.message); }
+            await safeUseCredits(req, actualCost, 'video-gen', videoUrls.length);
 
             // ✅ Salvăm istoricul pe SERVER — întotdeauna, chiar dacă clientul a dat refresh
             // (necesar pentru restore după refresh via _pollForResult)
@@ -1013,6 +1070,40 @@ const STORYBOARD_CONFIG = {
     maxTotalSec: 45,
     allowedDurations: [6, 10],
     costPerScene: 2,
+};
+
+// Error mapper specific pentru Storyboard — NU folosi mapVideoError care mănâncă "credit"/"insufficient" cu mesaj generic
+const mapStoryboardError = (msg, code, status) => {
+    const combined = `${code || ''} ${msg || ''}`;
+    const lower = combined.toLowerCase();
+
+    // Plan premium — Grok Storyboard e blocat pe Free plan (vezi docs)
+    if (status === 403 || combined.includes('PREMIUM_PLAN_REQUIRED') || lower.includes('premium plan')) {
+        return '⚠️ Grok Storyboard necesită plan Premium pe contul API GeminiGen.\n\nAdministratorul trebuie să upgradeze la Premium pe https://geminigen.ai/pricing.\n\nÎntre timp poți folosi Grok 3 · 6s sau 10s (generare simplă).';
+    }
+    // Credite insuficiente pe contul API
+    if (status === 402 || combined.includes('NOT_ENOUGH_CREDIT') || combined.includes('NOT_ENOUGH_AND_LOCK_CREDIT')) {
+        return '⚠️ Contul API GeminiGen nu are suficiente credite pentru storyboard. Contactează administratorul pentru reîncărcare.';
+    }
+    // Serviciu negăsit / preț ne-configurat
+    if (combined.includes('SERVICE_PRICE_NOT_FOUND')) return '⚠️ Prețul pentru Storyboard nu e configurat pe serverul API. Contactează administratorul.';
+    if (combined.includes('SERVICE_UNAVAILABLE')) return '⚠️ Serverele de storyboard sunt aglomerate. Reîncearcă peste 30 minute.';
+    // Validări (n-ar trebui să ajungem aici — validăm și pe client și pe server înainte de POST)
+    if (combined.includes('INVALID_SCENES')) return '⚠️ Scenele sunt invalide (prompt gol sau durată greșită).';
+    if (combined.includes('TOTAL_DURATION_EXCEEDED')) return '⚠️ Durata totală depășește 45s.';
+    if (combined.includes('TOO_MANY_SCENES')) return '⚠️ Maxim 10 scene.';
+    if (combined.includes('TOO_FEW_SCENES')) return '⚠️ Minim 2 scene.';
+    if (combined.includes('INVALID_DURATION')) return '⚠️ Durata per scenă trebuie să fie 6 sau 10 secunde.';
+    if (combined.includes('INVALID_ASPECT_RATIO')) return '⚠️ Aspect ratio invalid.';
+    if (combined.includes('EMPTY_PROMPT')) return '⚠️ O scenă are promptul gol.';
+    // Content moderation
+    if (lower.includes('safety') || lower.includes('filter') || lower.includes('blocked') || combined.includes('UNSAFE_GENERATION')) {
+        return '🚫 Una din scene a fost blocată de filtrele de siguranță. Modifică promptul scenelor și reîncearcă.';
+    }
+
+    // Fallback: arătăm mesajul RAW ca să știe userul ce se întâmplă (în loc de "Capacitatea AI atinsă")
+    const clean = (msg || '').replace(/genaipro/gi, 'server AI').replace(/geminigen/gi, 'server AI').replace(/\bGrok\b/gi, 'server video').trim();
+    return `⚠️ Storyboard eșuat${code ? ' ('+code+')' : ''}: ${clean || 'eroare necunoscută'}`;
 };
 
 app.post('/api/media/video-storyboard',
@@ -1138,19 +1229,30 @@ app.post('/api/media/video-storyboard',
             }, 3, 5000);
 
             const postText = await postRes.text();
-            let postData;
+            let postData = {};
             try { postData = JSON.parse(postText); }
-            catch { return sendError(`Răspuns invalid de la server: ${postText.substring(0, 200)}`); }
+            catch { /* keep raw */ }
 
-            console.log(`[Storyboard] POST status=${postRes.status} uuid=${postData.uuid || 'N/A'} | ${emailTag}`);
+            console.log(`[Storyboard] POST status=${postRes.status} uuid=${postData.uuid || 'N/A'} rawBody=${postText.substring(0, 800)} | ${emailTag}`);
 
             if (!postRes.ok) {
-                const errMsg = postData.error || postData.message || postData.detail || `HTTP ${postRes.status}`;
-                return sendError(errMsg);
+                const errMsg = postData.error || postData.message || postData.detail || postText.substring(0, 400) || `HTTP ${postRes.status}`;
+                const errCode = postData.code || postData.error_code || '';
+                console.error(`[Storyboard] ❌ POST REJECTED status=${postRes.status} code="${errCode}" msg="${errMsg}" | ${emailTag}`);
+                // NU prin mapVideoError — e prea agresiv la "credit"/"insufficient"
+                clearKeepAlive();
+                if (!res.writableEnded && !clientAborted) {
+                    res.write(`data: ${JSON.stringify({ error: mapStoryboardError(errMsg, errCode, postRes.status) })}\n\n`);
+                    res.write('data: [DONE]\n\n'); res.end();
+                }
+                return;
             }
 
             const uuid = postData.uuid;
-            if (!uuid) return sendError('Niciun UUID în răspunsul serverului.');
+            if (!uuid) {
+                console.error(`[Storyboard] ❌ Fără UUID. Body: ${postText.substring(0, 500)} | ${emailTag}`);
+                return sendError('Serverul API a răspuns OK dar fără UUID. Verifică logurile server.');
+            }
 
             sendStatus(`Se generează storyboard-ul (${cleanScenes.length} scene · ${totalDur}s)...`);
 
@@ -1158,8 +1260,13 @@ app.post('/api/media/video-storyboard',
             const result = await pollGeminiGenResult(uuid, GEMINIGEN_API_KEY, emailTag, 150, 4000);
 
             if (!result.success) {
-                console.error(`[Storyboard] ❌ ${result.error} | ${emailTag}`);
-                return sendError(result.error);
+                console.error(`[Storyboard] ❌ POLLING FAILED: ${result.error} | ${emailTag}`);
+                clearKeepAlive();
+                if (!res.writableEnded && !clientAborted) {
+                    res.write(`data: ${JSON.stringify({ error: mapStoryboardError(result.error, '', 0) })}\n\n`);
+                    res.write('data: [DONE]\n\n'); res.end();
+                }
+                return;
             }
 
             // ── Upload pe R2 ──────────────────────────────────────────
@@ -1183,8 +1290,7 @@ app.post('/api/media/video-storyboard',
 
             // ── Scade credite + salvează istoric ──────────────────────
             await Log.create({ userEmail: req.user.email, type: 'video', count: 1, cost: totalCost }).catch(() => {});
-            try { await hubAPI.useCredits(req.userId, totalCost); }
-            catch (e) { console.error('Eroare scădere credite storyboard:', e.message); }
+            await safeUseCredits(req, totalCost, 'storyboard', 1);
 
             const storyboardLabel = `🎬 Storyboard (${cleanScenes.length} scene) — ${cleanScenes[0].prompt.substring(0, 100)}`;
             try {
