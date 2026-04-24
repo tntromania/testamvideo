@@ -7,17 +7,25 @@ const MODEL_META = {
     'grok-720p-6s': { type:'video', cost:2 },
     'grok-720p-10s':{ type:'video', cost:2 },
     'grok-extend':  { type:'video', cost:2 },
-    // Kling AI — premium video
-    'kling-2-5-relax-5s': { type:'video', cost:10 },
-    'kling-2-6-5s':       { type:'video', cost:20 },
-    'kling-3-0-5s':       { type:'video', cost:34 },
+    // Kling & Seedance — cost PER SECUNDĂ × durata selectată
+    'kling-3-0-720p':         { type:'video', crPerSec:4,  durRange:[3,15] },
+    'kling-3-0-1080p':        { type:'video', crPerSec:5,  durRange:[3,15] },
+    'kling-2-6-720p':         { type:'video', crPerSec:2,  durRange:[5,10], fixedDurs:[5,10] },
+    'kling-2-6-1080p':        { type:'video', crPerSec:4,  durRange:[5,10], fixedDurs:[5,10] },
+    'kling-motion-3-720p':    { type:'video', crPerSec:4,  durRange:[5,15], motion:true },
+    'kling-motion-3-1080p':   { type:'video', crPerSec:7,  durRange:[5,15], motion:true },
+    'kling-motion-2-6-720p':  { type:'video', crPerSec:3,  durRange:[5,15], motion:true },
+    'kling-motion-2-6-1080p': { type:'video', crPerSec:4,  durRange:[5,15], motion:true },
+    'seedance-fast-480p':     { type:'video', crPerSec:5,  durRange:[4,15] },
 };
 let mode = 'image';
 let imgCount = 1;
 let vidCount = 1;
+let vidDuration = 5;    // durata selectată pentru Kling/Seedance
 let uploadedRefs = [];
 let startFrameFile = null;
 let endFrameFile   = null;
+let refVideoFile   = null;   // video de referință pentru Motion Control
 let activeJobs = new Map();
 let jobCounter = 0;
 let lbMediaList = [], lbCurrentIndex = 0, lbCurrentType = 'image';
@@ -61,6 +69,8 @@ window.onload = async () => {
         document.getElementById('og-vid').style.display = '';
         document.getElementById('og-grok').style.display = '';
         document.getElementById('og-kling').style.display = '';
+        document.getElementById('og-kling-motion').style.display = '';
+        document.getElementById('og-seedance').style.display = '';
         document.getElementById('model-sel').value = 'grok-720p-6s';
         updateModelEtaChip();
         document.getElementById('img-options').classList.add('hidden');
@@ -90,12 +100,23 @@ function updateVCount(d){ vidCount=Math.min(4,Math.max(1,vidCount+d)); document.
 
 function refreshBadges(){
     const sel = document.getElementById('model-sel');
-    const m = MODEL_META[sel?.value]||{type:'image',cost:1};
+    const modelId = sel?.value || '';
+    const m = MODEL_META[modelId]||{type:'image',cost:1};
     const n = mode==='image'?imgCount:vidCount;
-    document.getElementById('total-cost').textContent = m.cost*n;
+    let cost;
+    if (m.crPerSec) {
+        // Kling/Seedance: per-second pricing
+        const effDur = m.fixedDurs
+            ? (vidDuration <= 7 ? 5 : 10)
+            : Math.min(Math.max(vidDuration, m.durRange[0]), m.durRange[1]);
+        cost = m.crPerSec * effDur * n;
+    } else {
+        cost = (m.cost || 2) * n;
+    }
+    document.getElementById('total-cost').textContent = cost;
 }
 
-function onModelChange(){ refreshBadges(); updateModelEtaChip(); }
+function onModelChange(){ refreshBadges(); updateModelEtaChip(); updateKlingOptions(); }
 
 function updateModelEtaChip(){
     const chip = document.getElementById('model-eta-chip');
@@ -107,10 +128,12 @@ function updateModelEtaChip(){
     } else if(modelId.startsWith('veo')){
         chip.style.display = 'flex';
         chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">${modelId==='veo-extend'?'🔗':'⏳'}</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(167,139,250,0.9);letter-spacing:0.02em">1–2 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${modelId==='veo-extend'?'Veo Extend · continuă video':'servere aglomerate'}</span></div></div>`;
-    } else if(modelId.startsWith('kling-')){
-        const klingLabel = modelId==='kling-2-5-relax-5s' ? 'Kling 2.5 Relax · calitate bună, rapid' : modelId==='kling-2-6-5s' ? 'Kling 2.6 · calitate superioară' : 'Kling 3.0 · calitate premium';
+    } else if(modelId.startsWith('kling-') || modelId === 'seedance-fast-480p'){
+        const isMotion = modelId.includes('motion');
+        const isSeedance = modelId === 'seedance-fast-480p';
+        const klingLabel = isSeedance ? 'Seedance · Bytedance AI video' : isMotion ? 'Motion Control · video de referință necesar' : modelId.includes('3-0') ? 'Kling 3.0 · calitate premium' : 'Kling 2.6 · calitate superioară';
         chip.style.display = 'flex';
-        chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">🎬</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(251,196,60,0.9);letter-spacing:0.02em">2–4 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${klingLabel}</span></div></div>`;
+        chip.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);width:100%;box-sizing:border-box"><span style="font-size:0.95rem">${isMotion ? '🎥' : isSeedance ? '🌱' : '🎬'}</span><div><span style="font-size:0.68rem;font-weight:700;color:rgba(251,196,60,0.9);letter-spacing:0.02em">2–5 minute</span><span style="font-size:0.65rem;color:rgba(255,255,255,0.3);margin-left:6px">${klingLabel}</span></div></div>`;
     } else {
         chip.style.display = 'none';
         chip.innerHTML = '';
@@ -126,6 +149,7 @@ function switchMode(m){
     document.getElementById('og-vid').style.display = isVid?'':'none';
     document.getElementById('og-grok').style.display = isVid?'':'none';
     document.getElementById('og-kling').style.display = isVid?'':'none';
+    document.getElementById('og-seedance').style.display = isVid?'':'none';
     document.getElementById('model-sel').value = isVid?'grok-720p-6s':'gemini-flash';
     updateModelEtaChip();
     document.getElementById('img-options').classList.toggle('hidden',isVid);
@@ -610,12 +634,21 @@ async function runJob(jobId, promptText, currentMode, ratio, refs, token, startF
             if(!data?.saved_to_history) await saveToSupabase(urls,promptText,currentMode,[]);
         } else {
             const model_id=document.getElementById('model-sel').value;
+            const _mMeta = MODEL_META[model_id] || {};
             let statusMsg = 'Se trimite la AI...';
             if (startFrame && endFrame) statusMsg = 'Se trimite cu start + end frame...';
             else if (startFrame) statusMsg = 'Se trimite cu start frame...';
             else if (model_id === 'veo-extend' || model_id === 'grok-extend') statusMsg = 'Se trimite pentru extend video...';
+            else if (_mMeta.motion && refVideoFile) statusMsg = `Se trimite Motion Control (${refVideoFile.name})...`;
+            else if (_mMeta.motion) statusMsg = 'Motion Control — lipsă video referință!';
+            else if (_mMeta.crPerSec) statusMsg = `Se generează ${vidDuration}s...`;
             setJobStatus(jobId, statusMsg);
             fd.append('prompt',promptText); fd.append('aspect_ratio',ratio); fd.append('number_of_videos',vidCount); fd.append('model_id',model_id);
+            // Durata selectată pentru Kling/Seedance
+            const _m = MODEL_META[model_id] || {};
+            if (_m.crPerSec) fd.append('duration', String(vidDuration));
+            // Motion control: video de referință
+            if (_m.motion && refVideoFile) fd.append('ref_video', refVideoFile, refVideoFile.name);
             if (startFrame) fd.append('start_image', startFrame, startFrame.name);
             if (endFrame)   fd.append('end_image',   endFrame,   endFrame.name);
             refs.forEach(f=>fd.append('ref_images',f,f.name));
@@ -734,6 +767,81 @@ async function submitExtend() {
 
 document.addEventListener('keydown', e => { if(e.key==='Escape' && document.getElementById('extend-modal').style.display==='flex') closeExtendModal(); });
 
+// ===================== KLING/SEEDANCE OPTIONS =====================
+function updateKlingOptions() {
+    const modelId = document.getElementById('model-sel')?.value || '';
+    const m = MODEL_META[modelId] || {};
+    const isKlingSeed = m.crPerSec !== undefined;
+    const isMotion = m.motion === true;
+
+    const durSection = document.getElementById('kling-dur-section');
+    const motionSection = document.getElementById('kling-motion-section');
+    const frameSection = document.querySelector('.frames-section');
+
+    if (durSection) {
+        durSection.style.display = isKlingSeed ? '' : 'none';
+        if (isKlingSeed) renderDurationBtns(modelId, m);
+    }
+    if (motionSection) motionSection.style.display = isMotion ? '' : 'none';
+    if (frameSection)  frameSection.style.display  = isMotion ? 'none' : '';
+
+    refreshBadges();
+}
+
+function renderDurationBtns(modelId, m) {
+    const container = document.getElementById('kling-dur-btns');
+    if (!container) return;
+
+    let durs = [];
+    if (m.fixedDurs) {
+        durs = m.fixedDurs;
+    } else {
+        const [min, max] = m.durRange;
+        for (let i = min; i <= max; i++) durs.push(i);
+    }
+
+    // Clamp vidDuration to valid range
+    if (!durs.includes(vidDuration)) {
+        vidDuration = durs[0];
+    }
+
+    container.innerHTML = durs.map(d => {
+        const isActive = d === vidDuration;
+        const style = isActive
+            ? 'background:rgba(251,146,60,0.2);border:1.5px solid rgba(251,146,60,0.5);color:rgba(251,196,60,0.95)'
+            : 'background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5)';
+        return `<button onclick="selectDuration(${d})" style="padding:5px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;${style}">${d}s</button>`;
+    }).join('');
+}
+
+function selectDuration(d) {
+    vidDuration = d;
+    const modelId = document.getElementById('model-sel')?.value || '';
+    const m = MODEL_META[modelId] || {};
+    if (m.crPerSec) renderDurationBtns(modelId, m);
+    refreshBadges();
+}
+
+function handleRefVideoSelect(e) {
+    const file = e.target.files[0]; if (!file) return;
+    refVideoFile = file;
+    const preview = document.getElementById('ref-video-name');
+    if (preview) preview.textContent = file.name;
+    const zone = document.getElementById('ref-video-zone');
+    const previewEl = document.getElementById('ref-video-preview');
+    if (zone) zone.style.display = 'none';
+    if (previewEl) previewEl.style.display = 'flex';
+    e.target.value = '';
+}
+
+function removeRefVideo() {
+    refVideoFile = null;
+    const zone = document.getElementById('ref-video-zone');
+    const previewEl = document.getElementById('ref-video-preview');
+    if (zone) zone.style.display = '';
+    if (previewEl) previewEl.style.display = 'none';
+}
+
 // ===================== GENERATE =====================
 async function generate(){
     const token=getToken(); if(!token){ openLoginModal(); return; }
@@ -757,7 +865,7 @@ async function generate(){
     runJob(jobId,promptText,currentMode,ratio,refs,token,startFrame,endFrame);
     if(currentMode==='video'){
         const modelId = document.getElementById('model-sel')?.value || '';
-        const maxSec = (modelId.startsWith('grok-')) ? 50 : modelId.startsWith('kling-') ? 240 : 130;
+        const maxSec = modelId.startsWith('grok-') ? 50 : (modelId.startsWith('kling-') || modelId === 'seedance-fast-480p') ? 300 : 130;
         startEtaTimer(jobId, maxSec);
         markTaskActive(jobId, { type: 'video', prompt: promptText, model: modelId, ratio, count: vidCount });
     } else {
@@ -813,7 +921,7 @@ function tryRestoreTask() {
 
     if (restoredMode === 'video' || task.type === 'extend') {
         const elapsed = Math.floor(age / 1000);
-        const maxSec = (restoredModel || '').startsWith('grok') ? 50 : (restoredModel || '').startsWith('kling') ? 240 : 130;
+        const maxSec = (restoredModel||'').startsWith('grok') ? 50 : ((restoredModel||'').startsWith('kling')||(restoredModel||'')==='seedance-fast-480p') ? 300 : 130;
         startEtaTimer(restoredJobId, Math.max(maxSec - elapsed, 5));
     }
 

@@ -839,10 +839,20 @@
                             <option value="grok-720p-6s" data-type="video" data-cost="2">Grok 3 · 720p · 6s ⚡ — 2 Credite</option>
                             <option value="grok-720p-10s" data-type="video" data-cost="2">Grok 3 · 720p · 10s 💎 — 2 Credite</option>
                         </optgroup>
-                        <optgroup label="Video (Kling AI) — Premium 🎬" id="og-kling" style="display:none">
-                            <option value="kling-2-5-relax-5s" data-type="video" data-cost="10">Kling 2.5 Relax · 720p · 5s 💸 — 10 Credite</option>
-                            <option value="kling-2-6-5s" data-type="video" data-cost="20">Kling 2.6 · 720p · 5s ⚡ — 20 Credite</option>
-                            <option value="kling-3-0-5s" data-type="video" data-cost="34">Kling 3.0 · 720p · 5s 🏆 — 34 Credite</option>
+                        <optgroup label="🎬 Kling AI — Text to Video" id="og-kling" style="display:none">
+                            <option value="kling-2-6-720p"  data-type="video">Kling 2.6 · 720p · 5s/10s</option>
+                            <option value="kling-2-6-1080p" data-type="video">Kling 2.6 · 1080p · 5s/10s 💎</option>
+                            <option value="kling-3-0-720p"  data-type="video">Kling 3.0 · 720p · 3–15s 🏆</option>
+                            <option value="kling-3-0-1080p" data-type="video">Kling 3.0 · 1080p · 3–15s 💎🏆</option>
+                        </optgroup>
+                        <optgroup label="🎥 Kling Motion Control" id="og-kling-motion" style="display:none">
+                            <option value="kling-motion-2-6-720p"  data-type="video">Kling 2.6 Motion · 720p</option>
+                            <option value="kling-motion-2-6-1080p" data-type="video">Kling 2.6 Motion · 1080p 💎</option>
+                            <option value="kling-motion-3-720p"    data-type="video">Kling 3.0 Motion · 720p 🏆</option>
+                            <option value="kling-motion-3-1080p"   data-type="video">Kling 3.0 Motion · 1080p 💎🏆</option>
+                        </optgroup>
+                        <optgroup label="🌱 Bytedance Seedance" id="og-seedance" style="display:none">
+                            <option value="seedance-fast-480p" data-type="video">Seedance 2 Fast · 480p · 4–15s ⚡</option>
                         </optgroup>
                     </select>
                 </div>
@@ -895,9 +905,10 @@
             <div id="vid-options" class="hidden">
                 <div class="panel-s pt-0">
                     <label class="field-label">Format Video</label>
-                    <div class="rounded-xl p-1.5 grid grid-cols-2 gap-1.5" style="background:rgba(255,255,255,0.03)">
+                    <div class="rounded-xl p-1.5 grid grid-cols-3 gap-1.5" style="background:rgba(255,255,255,0.03)">
                         <label class="ratio-pill"><input type="radio" name="vratio" value="9:16" checked><span><div class="w-[9px] h-[17px] border-[2px] border-current rounded-[2px] opacity-60"></div>9:16</span></label>
                         <label class="ratio-pill"><input type="radio" name="vratio" value="16:9"><span><div class="w-[17px] h-[9px] border-[2px] border-current rounded-[2px] opacity-60"></div>16:9</span></label>
+                        <label class="ratio-pill"><input type="radio" name="vratio" value="1:1"><span><div class="w-[13px] h-[13px] border-[2px] border-current rounded-[2px] opacity-60"></div>1:1</span></label>
                     </div>
                 </div>
                 <div class="panel-s pt-0">
@@ -908,8 +919,37 @@
                         <button class="count-btn" onclick="updateVCount(1)">+</button>
                     </div>
                 </div>
+                <!-- KLING / SEEDANCE DURATION SELECTOR -->
+                <div id="kling-dur-section" class="panel-s pt-0" style="display:none">
+                    <label class="field-label mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left" style="color:rgba(251,146,60,0.7)"></i>
+                        Durată Video
+                    </label>
+                    <div id="kling-dur-btns" class="flex flex-wrap gap-1.5"></div>
+                </div>
+
+                <!-- MOTION CONTROL — VIDEO DE REFERINȚĂ -->
+                <div id="kling-motion-section" class="panel-s pt-0" style="display:none">
+                    <label class="field-label mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-film" style="color:rgba(251,146,60,0.7)"></i>
+                        Video Referință Motion
+                        <span class="normal-case font-medium" style="color:rgba(248,113,113,0.7)">obligatoriu</span>
+                    </label>
+                    <input type="file" id="ref-video-input" class="hidden" accept="video/mp4,video/mov,video/webm" onchange="handleRefVideoSelect(event)">
+                    <div id="ref-video-zone" class="dropzone flex flex-col items-center justify-center text-center p-4 min-h-[72px]" onclick="document.getElementById('ref-video-input').click()" style="border-color:rgba(251,146,60,0.3)">
+                        <i class="fa-solid fa-video mb-1.5" style="color:rgba(251,146,60,0.4);font-size:1.3rem"></i>
+                        <span class="text-[0.65rem] font-bold" style="color:rgba(251,146,60,0.6)">Încarcă videoclip referință</span>
+                        <span class="text-[0.58rem] mt-1" style="color:rgba(255,255,255,0.2)">MP4 / MOV / WebM · max 100MB</span>
+                    </div>
+                    <div id="ref-video-preview" class="hidden items-center gap-3 px-3 py-2.5 rounded-xl" style="display:none;background:rgba(251,146,60,0.06);border:1px solid rgba(251,146,60,0.2)">
+                        <i class="fa-solid fa-video shrink-0" style="color:rgba(251,146,60,0.7)"></i>
+                        <span id="ref-video-name" class="flex-1 text-[0.7rem] font-bold truncate" style="color:rgba(255,255,255,0.6)">video.mp4</span>
+                        <button onclick="removeRefVideo()" style="width:22px;height:22px;border-radius:50%;background:rgba(239,68,68,0.8);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.5rem;flex-shrink:0"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
                 <!-- START & END FRAME -->
-                <div class="panel-s pt-0 border-none">
+                <div class="panel-s pt-0 border-none frames-section">
                     <label class="field-label mb-3">Cadre Video <span class="normal-case font-medium" style="color:rgba(255,255,255,0.2)">(opțional)</span></label>
                     <p class="text-[0.68rem] font-medium mb-3 leading-relaxed" style="color:rgba(255,255,255,0.25)">Start/end frame pentru control animație. Fără imagini = generare din text.</p>
                     <input type="file" id="start-frame-input" class="hidden" accept="image/*" onchange="handleFrameSelect('start', event)">
@@ -943,6 +983,7 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- end frames-section -->
             </div>
 
             <!-- REFS -->
